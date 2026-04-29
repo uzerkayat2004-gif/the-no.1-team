@@ -5,3 +5,4 @@ dist/
 out/
 release/
 *.log
+tests/screenshots/*.png
