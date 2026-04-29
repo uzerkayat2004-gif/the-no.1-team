@@ -6,11 +6,18 @@ export default function CheckpointMessage({ checkpoint, sessionId, onAction }) {
   const handleButton = (buttonLabel) => {
     const lower = buttonLabel.toLowerCase()
     let action = 'approved'
-    if (lower.includes('send back') || lower.includes('revise') || lower.includes('retry') || lower.includes('fix') || lower.includes('try again'))
+
+    const sendbackKeywords = ['send back', 'revise', 'retry', 'fix', 'try again']
+
+    if (sendbackKeywords.some(kw => lower.includes(kw))) {
       action = 'sendback'
-    else if (lower.includes('cancel')) action = 'cancelled'
-    else if (lower.includes('review code') || lower.includes('review')) action = 'review'
-    else if (lower.includes('skip')) action = 'skip'
+    } else if (lower.includes('cancel')) {
+      action = 'cancelled'
+    } else if (lower.includes('review')) {
+      action = 'review'
+    } else if (lower.includes('skip')) {
+      action = 'skip'
+    }
 
     if (action === 'sendback') {
       window.teamAPI?.bossSendBack(sessionId, null, '')
