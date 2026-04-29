@@ -111,8 +111,18 @@ export default function GeneralTab({ sessionId }) {
     removers.push(window.teamAPI.onAgentChunk((data) => {
       if (data.sessionId !== currentSessionId) return
       setMessages(prev => {
-        const existing = prev.find(m => m.agentId === data.agentId && m.inProgress)
-        if (existing) return prev.map(m => m.id === existing.id ? { ...m, content: m.content + data.content } : m)
+        let foundIndex = -1
+        for (let i = prev.length - 1; i >= 0; i--) {
+          if (prev[i].agentId === data.agentId && prev[i].inProgress) {
+            foundIndex = i
+            break
+          }
+        }
+        if (foundIndex !== -1) {
+          const next = [...prev]
+          next[foundIndex] = { ...next[foundIndex], content: next[foundIndex].content + data.content }
+          return next
+        }
         return [...prev, { id: Date.now() + Math.random(), agent: data.agent, agentId: data.agentId,
           content: data.content, inProgress: true, timestamp: new Date() }]
       })
