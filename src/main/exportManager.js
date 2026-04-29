@@ -74,4 +74,4 @@ async function exportSession({ format, sessionData, folderRel, browserWindow }) 
   return saveExport(content, safeName, ext, browserWindow);
 }
 
-module.exports = { exportSession };
+module.exports = { exportSession, exportMarkdown, exportFullReport, exportPlainText };
