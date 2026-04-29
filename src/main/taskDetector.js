@@ -19,6 +19,7 @@ const TASK_TYPES = {
 
 // Detect from slash command (highest priority — exact match)
 function detectFromSlash(message) {
+  if (typeof message !== 'string') return null;
   const match = message.match(/^\/(\w+)/);
   if (!match) return null;
   const cmd = match[1].toLowerCase();
@@ -27,31 +28,34 @@ function detectFromSlash(message) {
 
 // Detect from keywords (fallback)
 function detectFromKeywords(message) {
+  if (typeof message !== 'string') return TASK_TYPES.general;
   const msg = message.toLowerCase();
 
-  if (['quick research', 'fast research', 'quick search'].some(kw => msg.includes(kw)))
+  const hasKeywords = (keywords) => keywords.some(k => msg.includes(k));
+
+  if (hasKeywords(['quick research', 'fast research', 'quick search']))
     return TASK_TYPES.quick;
-  if (['deep research', 'thorough research', 'full research'].some(kw => msg.includes(kw)))
+  if (hasKeywords(['deep research', 'thorough research', 'full research']))
     return TASK_TYPES.deep;
-  if (['team code', 'teamcode', 'parallel code', 'all agents code'].some(kw => msg.includes(kw)))
+  if (hasKeywords(['team code', 'teamcode', 'parallel code', 'all agents code']))
     return TASK_TYPES.teamcode;
-  if (msg.includes('review') && ['code', 'file'].some(kw => msg.includes(kw)))
+  if (msg.includes('review') && hasKeywords(['code', 'file']))
     return TASK_TYPES.review;
-  if (['debug', 'fix', 'error', 'bug'].some(kw => msg.includes(kw)))
+  if (hasKeywords(['debug', 'fix', 'error', 'bug']))
     return TASK_TYPES.debug;
   if (msg.includes('test') && msg.includes('app'))
     return TASK_TYPES.apptest;
-  if (['test', 'unit test', 'write test'].some(kw => msg.includes(kw)))
+  if (hasKeywords(['test', 'unit test', 'write test']))
     return TASK_TYPES.test;
-  if (['plan', 'architect', 'design system', 'structure'].some(kw => msg.includes(kw)))
+  if (hasKeywords(['plan', 'architect', 'design system', 'structure']))
     return TASK_TYPES.plan;
-  if (['document', 'readme', 'summarize file', 'convert file'].some(kw => msg.includes(kw)))
+  if (hasKeywords(['document', 'readme', 'summarize file', 'convert file']))
     return TASK_TYPES.doc;
-  if (['brainstorm', 'chat', 'discuss', 'idea'].some(kw => msg.includes(kw)))
+  if (hasKeywords(['brainstorm', 'chat', 'discuss', 'idea']))
     return TASK_TYPES.brainstorm;
-  if (['code', 'build', 'create', 'implement', 'write'].some(kw => msg.includes(kw)))
+  if (hasKeywords(['code', 'build', 'create', 'implement', 'write']))
     return TASK_TYPES.code;
-  if (['research', 'find', 'search', 'look up', 'what is'].some(kw => msg.includes(kw)))
+  if (hasKeywords(['research', 'find', 'search', 'look up', 'what is']))
     return TASK_TYPES.research;
 
   return TASK_TYPES.general;
@@ -68,6 +72,9 @@ function detectTaskType(message) {
 
 // Strip slash command from message before sending to agents
 function stripSlashCommand(message) {
+  if (typeof message !== 'string') {
+    return (message === null || message === undefined) ? '' : String(message);
+  }
   return message.replace(/^\/\w+\s*/, '').trim();
 }
 

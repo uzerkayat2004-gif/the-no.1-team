@@ -36,6 +36,15 @@ function getBrainPath() {
   return path.join(os.homedir(), 'no1team', 'brain')
 }
 
+function getSafePath(base, relativePath) {
+  const fullPath = path.resolve(base, relativePath)
+  const relative = path.relative(base, fullPath)
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Access denied: Path traversal detected')
+  }
+  return fullPath
+}
+
 function initBrainStructure() {
   const base = path.join(os.homedir(), 'no1team');
 
@@ -217,7 +226,7 @@ Best for: Tasks needing model routing
 
 function readBrainFile(relativePath) {
   try {
-    return fs.readFileSync(path.join(getBrainPath(), relativePath), 'utf-8')
+    return fs.readFileSync(getSafePath(getBrainPath(), relativePath), 'utf-8')
   } catch (err) { return '' }
 }
 
@@ -464,13 +473,17 @@ ipcMain.handle('list-skills', () => {
   return fs.readdirSync(skillsDir).filter(f => f.endsWith('.md')).map(f => f.replace('.md', ''))
 })
 ipcMain.handle('read-skill', (event, skillId) => {
-  const p = path.join(os.homedir(), 'no1team', 'brain', 'skills', `${skillId}.md`)
-  return fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : ''
+  try {
+    const p = getSafePath(path.join(os.homedir(), 'no1team', 'brain', 'skills'), `${skillId}.md`)
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : ''
+  } catch (err) { return '' }
 })
 ipcMain.handle('write-skill', (event, { skillId, content }) => {
-  const p = path.join(os.homedir(), 'no1team', 'brain', 'skills', `${skillId}.md`)
-  fs.writeFileSync(p, content, 'utf-8')
-  return true
+  try {
+    const p = getSafePath(path.join(os.homedir(), 'no1team', 'brain', 'skills'), `${skillId}.md`)
+    fs.writeFileSync(p, content, 'utf-8')
+    return true
+  } catch (err) { return false }
 })
 
 /* ═══════════════════════════
@@ -585,7 +598,7 @@ ipcMain.handle('brain:getSkill', async () => {
 
 ipcMain.handle('brain:saveSkill', async (event, { content }) => {
   try {
-    fs.writeFileSync(path.join(getBrainPath(), 'skills', 'how_to_join_team.md'), content, 'utf-8')
+    fs.writeFileSync(getSafePath(getBrainPath(), 'skills/how_to_join_team.md'), content, 'utf-8')
     return { success: true }
   } catch (err) { return { success: false, error: err.message } }
 })
@@ -612,7 +625,7 @@ ipcMain.handle('session:save', async (event, { sessionNumber, data }) => {
   try {
     const sessDir = getSessionsPath()
     if (!fs.existsSync(sessDir)) fs.mkdirSync(sessDir, { recursive: true })
-    const filePath = path.join(sessDir, `session_${sessionNumber}.md`)
+    const filePath = getSafePath(sessDir, `session_${sessionNumber}.md`)
     let content = `# Session ${sessionNumber}\n\n`
     content += `**Task:** ${data.task || 'No task set'}\n`
     content += `**Phase:** ${data.phase || 'Phase 1'}\n`
@@ -634,7 +647,7 @@ ipcMain.handle('session:save', async (event, { sessionNumber, data }) => {
 
 ipcMain.handle('session:load', async (event, { sessionNumber }) => {
   try {
-    const filePath = path.join(getSessionsPath(), `session_${sessionNumber}.md`)
+    const filePath = getSafePath(getSessionsPath(), `session_${sessionNumber}.md`)
     if (!fs.existsSync(filePath)) return { success: false, error: 'Session not found' }
     return { success: true, content: fs.readFileSync(filePath, 'utf-8') }
   } catch (err) { return { success: false, error: err.message } }
@@ -661,14 +674,14 @@ ipcMain.handle('session:saveState', async (event, { sessionNumber, state }) => {
   try {
     const sessDir = getSessionsPath()
     if (!fs.existsSync(sessDir)) fs.mkdirSync(sessDir, { recursive: true })
-    fs.writeFileSync(path.join(sessDir, `state_${sessionNumber}.json`), JSON.stringify(state, null, 2), 'utf-8')
+    fs.writeFileSync(getSafePath(sessDir, `state_${sessionNumber}.json`), JSON.stringify(state, null, 2), 'utf-8')
     return { success: true }
   } catch (err) { return { success: false, error: err.message } }
 })
 
 ipcMain.handle('session:loadState', async (event, { sessionNumber }) => {
   try {
-    const filePath = path.join(getSessionsPath(), `state_${sessionNumber}.json`)
+    const filePath = getSafePath(getSessionsPath(), `state_${sessionNumber}.json`)
     if (!fs.existsSync(filePath)) return { success: false, error: 'No saved state' }
     return { success: true, state: JSON.parse(fs.readFileSync(filePath, 'utf-8')) }
   } catch (err) { return { success: false, error: err.message } }
@@ -692,7 +705,7 @@ ipcMain.handle('session:searchPast', async (event, { keywords }) => {
           const summary = msgs.slice(-3).map(m => `${m.sender?.name || 'Unknown'}: ${(m.text || '').slice(0, 200)}`).join('\n')
           scored.push({ number: data.number || parseInt(f.match(/state_(\d+)/)?.[1] || '0'), title: data.title || 'Unknown', hits, summary })
         }
-      } catch (e) {}
+      } catch (e) { console.error('Error reading or processing session state file during past session search', e) }
     }
     scored.sort((a, b) => b.hits - a.hits)
     return { results: scored.slice(0, 5) }
@@ -728,20 +741,20 @@ function buildTree(dirPath, relativeTo) {
         items.push({ name: entry.name, path: relPath, type: 'file', size: stat.size, modified: stat.mtime.toISOString() })
       }
     }
-  } catch (err) {}
+  } catch (err) { console.error('Error building brain tree structure', err) }
   return items.sort((a, b) => { if (a.type !== b.type) return a.type === 'folder' ? -1 : 1; return a.name.localeCompare(b.name) })
 }
 
 ipcMain.handle('brain:listTree', async () => { return { tree: buildTree(getBrainPath(), getBrainPath()) } })
 
 ipcMain.handle('brain:readFile', async (event, { filePath }) => {
-  try { return { success: true, content: fs.readFileSync(path.join(getBrainPath(), filePath), 'utf-8') } }
+  try { return { success: true, content: fs.readFileSync(getSafePath(getBrainPath(), filePath), 'utf-8') } }
   catch (err) { return { success: false, error: err.message } }
 })
 
 ipcMain.handle('brain:writeFile', async (event, { filePath, content }) => {
   try {
-    const fullPath = path.join(getBrainPath(), filePath)
+    const fullPath = getSafePath(getBrainPath(), filePath)
     const dir = path.dirname(fullPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(fullPath, content, 'utf-8')
@@ -751,7 +764,7 @@ ipcMain.handle('brain:writeFile', async (event, { filePath, content }) => {
 
 ipcMain.handle('brain:appendFile', async (event, { filePath, content }) => {
   try {
-    const fullPath = path.join(getBrainPath(), filePath)
+    const fullPath = getSafePath(getBrainPath(), filePath)
     const dir = path.dirname(fullPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     fs.appendFileSync(fullPath, content, 'utf-8')
@@ -781,7 +794,7 @@ ipcMain.handle('brain:searchContent', async (event, { query }) => {
               const snippet = (start > 0 ? '...' : '') + content.slice(start, end).replace(/\n/g, ' ') + (end < content.length ? '...' : '')
               results.push({ path: path.relative(brainPath, fullPath).replace(/\\/g, '/'), name: entry.name, snippet, matchIndex: idx })
             }
-          } catch (e) {}
+          } catch (e) { console.error('Error reading file or calculating match index during brain search', e) }
         }
       }
     }
@@ -808,7 +821,7 @@ ipcMain.handle('brain:scanBacklinks', async (event, { targetFileName }) => {
             if (pattern.test(fs.readFileSync(fullPath, 'utf-8'))) {
               backlinks.push({ path: path.relative(brainPath, fullPath).replace(/\\/g, '/'), name: entry.name })
             }
-          } catch (e) {}
+          } catch (e) { console.error('Error reading file for pattern testing during backlinks scan', e) }
         }
       }
     }
@@ -833,7 +846,7 @@ ipcMain.handle('brain:scanOrphans', async () => {
             const content = fs.readFileSync(fullPath, 'utf-8')
             const matches = content.match(linkPattern)
             allFiles.push({ path: path.relative(brainPath, fullPath).replace(/\\/g, '/'), name: entry.name, baseName: entry.name.replace(/\.md$/i, ''), outgoing: matches ? matches.map(m => m.slice(2, -2).toLowerCase()) : [] })
-          } catch (e) {}
+          } catch (e) { console.error('Error reading file or calculating matches during orphans scan', e) }
         }
       }
     }
