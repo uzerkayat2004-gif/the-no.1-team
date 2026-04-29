@@ -44,7 +44,8 @@ function extractMeta(content, key) {
   return m ? m[1].trim() : null;
 }
 
-function saveSession({ sessionId, sessionName, taskType, task, finalAnswer, seniorAgent, agents, researchData, combinedDoc, brainstormTranscript, bossApproved, sendBackCount }) {
+function saveSession(sessionData) {
+  const { sessionId, sessionName, taskType, task, finalAnswer, seniorAgent, agents, researchData, combinedDoc, brainstormTranscript, bossApproved, sendBackCount } = sessionData || {};
   const date = new Date().toISOString().slice(0, 10);
   const safeName = (sessionName || sessionId).replace(/[^a-z0-9-_]/gi, '-').slice(0, 40);
   const folderRel = `sessions/${safeName}`;
