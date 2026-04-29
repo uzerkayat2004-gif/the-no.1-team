@@ -765,15 +765,28 @@ ipcMain.handle('brain:searchContent', async (event, { query }) => {
     const results = []
     const q = (query || '').toLowerCase()
     if (!q || q.length < 2) return { results: [] }
-    function searchDir(dirPath) {
-      if (!fs.existsSync(dirPath)) return
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    async function searchDir(dirPath) {
+      let entries;
+      try {
+        entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
+      } catch (err) {
+        return
+      }
+
+      const files = [];
+      const dirs = [];
       for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name)
-        if (entry.isDirectory()) { searchDir(fullPath) }
-        else if (entry.name.endsWith('.md')) {
+        if (entry.isDirectory()) dirs.push(entry)
+        else if (entry.name.endsWith('.md')) files.push(entry)
+      }
+
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        const batch = files.slice(i, i + BATCH_SIZE)
+        await Promise.all(batch.map(async entry => {
+          const fullPath = path.join(dirPath, entry.name)
           try {
-            const content = fs.readFileSync(fullPath, 'utf-8')
+            const content = await fs.promises.readFile(fullPath, 'utf-8')
             const idx = content.toLowerCase().indexOf(q)
             if (idx !== -1) {
               const start = Math.max(0, idx - 40)
@@ -782,10 +795,14 @@ ipcMain.handle('brain:searchContent', async (event, { query }) => {
               results.push({ path: path.relative(brainPath, fullPath).replace(/\\/g, '/'), name: entry.name, snippet, matchIndex: idx })
             }
           } catch (e) {}
-        }
+        }))
+      }
+
+      for (const entry of dirs) {
+        await searchDir(path.join(dirPath, entry.name))
       }
     }
-    searchDir(brainPath)
+    await searchDir(brainPath)
     return { results: results.slice(0, 30) }
   } catch (err) { return { results: [] } }
 })
