@@ -346,13 +346,28 @@ ipcMain.handle('get-session-context', (event, sessionId) => sessionCtx.getSessio
 // Provider profiles IPC — use serializable version (no functions)
 ipcMain.handle('get-provider-profiles', () => getSerializableProfiles())
 ipcMain.handle('test-provider', async (event, agentId) => {
-  const { exec } = require('child_process')
+  const crossSpawn = require('cross-spawn')
+  const { parse } = require('shell-quote')
   const profiles = getAllProfiles()
   const profile = profiles[agentId]
   if (!profile) return { installed: false, error: 'Provider not found' }
+
+  const parsed = parse(profile.installCheck);
+  if (!parsed || parsed.length === 0) return { installed: false, error: 'Invalid installCheck command' };
+
+  const cmd = parsed[0];
+  const args = parsed.slice(1).map(arg => String(arg));
+
   return new Promise((resolve) => {
-    exec(profile.installCheck, { timeout: 5000 }, (err) => {
-      if (err) resolve({ installed: false, error: err.message })
+    // using cross-spawn prevents needing shell: true on Windows, which prevents command injection!
+    const proc = crossSpawn(cmd, args, { timeout: 5000 })
+
+    proc.on('error', (err) => {
+      resolve({ installed: false, error: err.message })
+    })
+
+    proc.on('close', (code) => {
+      if (code !== 0) resolve({ installed: false, error: `Command exited with code ${code}` })
       else resolve({ installed: true })
     })
   })
