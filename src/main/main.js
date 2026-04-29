@@ -728,7 +728,9 @@ function buildTree(dirPath, relativeTo) {
         items.push({ name: entry.name, path: relPath, type: 'file', size: stat.size, modified: stat.mtime.toISOString() })
       }
     }
-  } catch (err) {}
+  } catch (err) {
+    console.error('Error in buildTree:', err)
+  }
   return items.sort((a, b) => { if (a.type !== b.type) return a.type === 'folder' ? -1 : 1; return a.name.localeCompare(b.name) })
 }
 
