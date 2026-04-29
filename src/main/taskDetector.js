@@ -29,29 +29,31 @@ function detectFromSlash(message) {
 function detectFromKeywords(message) {
   const msg = message.toLowerCase();
 
-  if (msg.includes('quick research') || msg.includes('fast research') || msg.includes('quick search'))
+  const hasKeywords = (keywords) => keywords.some(k => msg.includes(k));
+
+  if (hasKeywords(['quick research', 'fast research', 'quick search']))
     return TASK_TYPES.quick;
-  if (msg.includes('deep research') || msg.includes('thorough research') || msg.includes('full research'))
+  if (hasKeywords(['deep research', 'thorough research', 'full research']))
     return TASK_TYPES.deep;
-  if (msg.includes('team code') || msg.includes('teamcode') || msg.includes('parallel code') || msg.includes('all agents code'))
+  if (hasKeywords(['team code', 'teamcode', 'parallel code', 'all agents code']))
     return TASK_TYPES.teamcode;
-  if (msg.includes('review') && (msg.includes('code') || msg.includes('file')))
+  if (msg.includes('review') && hasKeywords(['code', 'file']))
     return TASK_TYPES.review;
-  if (msg.includes('debug') || msg.includes('fix') || msg.includes('error') || msg.includes('bug'))
+  if (hasKeywords(['debug', 'fix', 'error', 'bug']))
     return TASK_TYPES.debug;
   if (msg.includes('test') && msg.includes('app'))
     return TASK_TYPES.apptest;
-  if (msg.includes('test') || msg.includes('unit test') || msg.includes('write test'))
+  if (hasKeywords(['test', 'unit test', 'write test']))
     return TASK_TYPES.test;
-  if (msg.includes('plan') || msg.includes('architect') || msg.includes('design system') || msg.includes('structure'))
+  if (hasKeywords(['plan', 'architect', 'design system', 'structure']))
     return TASK_TYPES.plan;
-  if (msg.includes('document') || msg.includes('readme') || msg.includes('summarize file') || msg.includes('convert file'))
+  if (hasKeywords(['document', 'readme', 'summarize file', 'convert file']))
     return TASK_TYPES.doc;
-  if (msg.includes('brainstorm') || msg.includes('chat') || msg.includes('discuss') || msg.includes('idea'))
+  if (hasKeywords(['brainstorm', 'chat', 'discuss', 'idea']))
     return TASK_TYPES.brainstorm;
-  if (msg.includes('code') || msg.includes('build') || msg.includes('create') || msg.includes('implement') || msg.includes('write'))
+  if (hasKeywords(['code', 'build', 'create', 'implement', 'write']))
     return TASK_TYPES.code;
-  if (msg.includes('research') || msg.includes('find') || msg.includes('search') || msg.includes('look up') || msg.includes('what is'))
+  if (hasKeywords(['research', 'find', 'search', 'look up', 'what is']))
     return TASK_TYPES.research;
 
   return TASK_TYPES.general;
