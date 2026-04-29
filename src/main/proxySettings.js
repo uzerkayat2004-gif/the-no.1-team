@@ -21,7 +21,7 @@ function loadProxySettings() {
       return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
     }
   } catch(e) {
-    console.error('Failed to load proxy settings:', e);
+    console.error('Failed to parse proxy config:', e);
   }
   return DEFAULT_SETTINGS;
 }
