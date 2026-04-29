@@ -692,7 +692,9 @@ ipcMain.handle('session:searchPast', async (event, { keywords }) => {
           const summary = msgs.slice(-3).map(m => `${m.sender?.name || 'Unknown'}: ${(m.text || '').slice(0, 200)}`).join('\n')
           scored.push({ number: data.number || parseInt(f.match(/state_(\d+)/)?.[1] || '0'), title: data.title || 'Unknown', hits, summary })
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Error parsing session state file for search:', e)
+      }
     }
     scored.sort((a, b) => b.hits - a.hits)
     return { results: scored.slice(0, 5) }
@@ -728,7 +730,9 @@ function buildTree(dirPath, relativeTo) {
         items.push({ name: entry.name, path: relPath, type: 'file', size: stat.size, modified: stat.mtime.toISOString() })
       }
     }
-  } catch (err) {}
+  } catch (err) {
+    console.error('Error building file tree:', err)
+  }
   return items.sort((a, b) => { if (a.type !== b.type) return a.type === 'folder' ? -1 : 1; return a.name.localeCompare(b.name) })
 }
 
@@ -781,7 +785,9 @@ ipcMain.handle('brain:searchContent', async (event, { query }) => {
               const snippet = (start > 0 ? '...' : '') + content.slice(start, end).replace(/\n/g, ' ') + (end < content.length ? '...' : '')
               results.push({ path: path.relative(brainPath, fullPath).replace(/\\/g, '/'), name: entry.name, snippet, matchIndex: idx })
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error('Error searching file content:', e)
+          }
         }
       }
     }
@@ -808,7 +814,9 @@ ipcMain.handle('brain:scanBacklinks', async (event, { targetFileName }) => {
             if (pattern.test(fs.readFileSync(fullPath, 'utf-8'))) {
               backlinks.push({ path: path.relative(brainPath, fullPath).replace(/\\/g, '/'), name: entry.name })
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error('Error scanning for backlinks:', e)
+          }
         }
       }
     }
@@ -833,7 +841,9 @@ ipcMain.handle('brain:scanOrphans', async () => {
             const content = fs.readFileSync(fullPath, 'utf-8')
             const matches = content.match(linkPattern)
             allFiles.push({ path: path.relative(brainPath, fullPath).replace(/\\/g, '/'), name: entry.name, baseName: entry.name.replace(/\.md$/i, ''), outgoing: matches ? matches.map(m => m.slice(2, -2).toLowerCase()) : [] })
-          } catch (e) {}
+          } catch (e) {
+            console.error('Error reading file for orphans scan:', e)
+          }
         }
       }
     }
