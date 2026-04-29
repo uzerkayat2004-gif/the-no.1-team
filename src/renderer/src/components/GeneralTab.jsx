@@ -476,7 +476,7 @@ export default function GeneralTab({ sessionId }) {
 
           if (msg.type === 'error' && msg.error) {
             return <ErrorDisplay key={msg.id} error={msg.error} sessionId={currentSessionId}
-              onAction={(action) => console.log('Error action:', action)} />
+              onAction={() => {}} />
           }
 
           if (isSystem) {
