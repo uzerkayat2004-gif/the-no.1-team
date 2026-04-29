@@ -43,7 +43,6 @@ class AgentRunner extends EventEmitter {
       cwd:   workDir || os.homedir(),
       env:   this._buildEnv(agentId),
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: true,
     });
 
     this._handleProcess(proc, profile.name, agentId, profile.outputFormat, sessionId, silent);
