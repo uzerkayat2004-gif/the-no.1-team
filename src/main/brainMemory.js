@@ -7,7 +7,7 @@ const os = require('os');
 const BRAIN = path.join(os.homedir(), 'no1team', 'brain');
 
 function readFile(relPath) {
-  try { const f = path.join(BRAIN, relPath); if (fs.existsSync(f)) return fs.readFileSync(f, 'utf-8'); } catch(e) {}
+  try { const f = path.join(BRAIN, relPath); if (fs.existsSync(f)) return fs.readFileSync(f, 'utf-8'); } catch(e) { console.error('Brain read error:', e); }
   return '';
 }
 
@@ -27,7 +27,7 @@ function appendToFile(relPath, content) {
 
 function restoreBackup(relPath) {
   const full = path.join(BRAIN, relPath); const bk = full + '.backup';
-  try { if (fs.existsSync(bk)) { fs.copyFileSync(bk, full); return true; } } catch(e) {}
+  try { if (fs.existsSync(bk)) { fs.copyFileSync(bk, full); return true; } } catch(e) { console.error('Brain restore backup error:', e); }
   return false;
 }
 
@@ -44,7 +44,8 @@ function extractMeta(content, key) {
   return m ? m[1].trim() : null;
 }
 
-function saveSession({ sessionId, sessionName, taskType, task, finalAnswer, seniorAgent, agents, researchData, combinedDoc, brainstormTranscript, bossApproved, sendBackCount }) {
+function saveSession(sessionData) {
+  const { sessionId, sessionName, taskType, task, finalAnswer, seniorAgent, agents, researchData, combinedDoc, brainstormTranscript, bossApproved, sendBackCount } = sessionData;
   const date = new Date().toISOString().slice(0, 10);
   const safeName = (sessionName || sessionId).replace(/[^a-z0-9-_]/gi, '-').slice(0, 40);
   const folderRel = `sessions/${safeName}`;
@@ -159,7 +160,7 @@ function listSessions() {
         taskType: extractMeta(moc, 'Task Type') || 'general', date: extractMeta(moc, 'Date') || '',
         status: extractMeta(moc, 'Status') || '', senior: extractMeta(moc, 'Senior Agent') || '' };
     }).sort((a, b) => b.date.localeCompare(a.date));
-  } catch(e) { return []; }
+  } catch(e) { console.error('Brain list sessions error:', e); return []; }
 }
 
 function getSkillStats() {
@@ -178,4 +179,4 @@ function getSkillStats() {
   return stats;
 }
 
-module.exports = { saveSession, loadSessionContext, buildResumeBriefing, loadRelevantMemory, updateAgentPerformance, updateSkillPerformance, logError, listSessions, getSkillStats, readFile, writeFile, restoreBackup };
+module.exports = { saveSession, loadSessionContext, buildResumeBriefing, loadRelevantMemory, updateAgentPerformance, updateSkillPerformance, logError, listSessions, getSkillStats, readFile, writeFile, restoreBackup, extractMeta };
