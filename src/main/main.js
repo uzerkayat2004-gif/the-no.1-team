@@ -695,18 +695,28 @@ ipcMain.handle('session:searchPast', async (event, { keywords }) => {
     const kw = (keywords || '').toLowerCase().split(/\s+/).filter(Boolean)
     if (kw.length === 0) return { results: [] }
     const scored = []
-    for (const f of stateFiles) {
-      try {
-        const data = JSON.parse(fs.readFileSync(path.join(sessDir, f), 'utf-8'))
-        const allText = ((data.title || '') + ' ' + (data.messages || []).map(m => m.text || '').join(' ')).toLowerCase()
-        const hits = kw.filter(k => allText.includes(k)).length
-        if (hits > 0) {
-          const msgs = data.messages || []
-          const summary = msgs.slice(-3).map(m => `${m.sender?.name || 'Unknown'}: ${(m.text || '').slice(0, 200)}`).join('\n')
-          scored.push({ number: data.number || parseInt(f.match(/state_(\d+)/)?.[1] || '0'), title: data.title || 'Unknown', hits, summary })
-        }
-      } catch (e) { console.error('Error reading or processing session state file during past session search', e) }
+    const batchSize = 100 // Process files in batches to unblock the main thread
+
+    for (let i = 0; i < stateFiles.length; i += batchSize) {
+      const batch = stateFiles.slice(i, i + batchSize)
+      const promises = batch.map(async f => {
+        try {
+          const content = await fs.promises.readFile(path.join(sessDir, f), 'utf-8')
+          const data = JSON.parse(content)
+          const allText = ((data.title || '') + ' ' + (data.messages || []).map(m => m.text || '').join(' ')).toLowerCase()
+          const hits = kw.filter(k => allText.includes(k)).length
+          if (hits > 0) {
+            const msgs = data.messages || []
+            const summary = msgs.slice(-3).map(m => `${m.sender?.name || 'Unknown'}: ${(m.text || '').slice(0, 200)}`).join('\n')
+            scored.push({ number: data.number || parseInt(f.match(/state_(\d+)/)?.[1] || '0'), title: data.title || 'Unknown', hits, summary })
+          }
+        } catch (e) { console.error('Error reading or processing session state file during past session search', e) }
+      })
+      await Promise.all(promises)
+      // Yield to the event loop so the UI and IPC handlers aren't blocked
+      await new Promise(resolve => setImmediate(resolve))
     }
+
     scored.sort((a, b) => b.hits - a.hits)
     return { results: scored.slice(0, 5) }
   } catch (err) { return { results: [] } }
