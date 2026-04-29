@@ -36,6 +36,14 @@ function getBrainPath() {
   return path.join(os.homedir(), 'no1team', 'brain')
 }
 
+function getSafePath(base, relativePath) {
+  const resolvedPath = path.resolve(base, relativePath);
+  if (!resolvedPath.startsWith(path.resolve(base))) {
+    throw new Error('Path traversal detected');
+  }
+  return resolvedPath;
+}
+
 function initBrainStructure() {
   const base = path.join(os.homedir(), 'no1team');
 
@@ -217,7 +225,7 @@ Best for: Tasks needing model routing
 
 function readBrainFile(relativePath) {
   try {
-    return fs.readFileSync(path.join(getBrainPath(), relativePath), 'utf-8')
+    return fs.readFileSync(getSafePath(getBrainPath(), relativePath), 'utf-8')
   } catch (err) { return '' }
 }
 
@@ -735,13 +743,13 @@ function buildTree(dirPath, relativeTo) {
 ipcMain.handle('brain:listTree', async () => { return { tree: buildTree(getBrainPath(), getBrainPath()) } })
 
 ipcMain.handle('brain:readFile', async (event, { filePath }) => {
-  try { return { success: true, content: fs.readFileSync(path.join(getBrainPath(), filePath), 'utf-8') } }
+  try { return { success: true, content: fs.readFileSync(getSafePath(getBrainPath(), filePath), 'utf-8') } }
   catch (err) { return { success: false, error: err.message } }
 })
 
 ipcMain.handle('brain:writeFile', async (event, { filePath, content }) => {
   try {
-    const fullPath = path.join(getBrainPath(), filePath)
+    const fullPath = getSafePath(getBrainPath(), filePath)
     const dir = path.dirname(fullPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(fullPath, content, 'utf-8')
@@ -751,7 +759,7 @@ ipcMain.handle('brain:writeFile', async (event, { filePath, content }) => {
 
 ipcMain.handle('brain:appendFile', async (event, { filePath, content }) => {
   try {
-    const fullPath = path.join(getBrainPath(), filePath)
+    const fullPath = getSafePath(getBrainPath(), filePath)
     const dir = path.dirname(fullPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     fs.appendFileSync(fullPath, content, 'utf-8')
