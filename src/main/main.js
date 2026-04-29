@@ -797,22 +797,32 @@ ipcMain.handle('brain:scanBacklinks', async (event, { targetFileName }) => {
     if (!targetBase) return { backlinks: [] }
     const backlinks = []
     const pattern = new RegExp(`\\[\\[${targetBase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\]`, 'i')
-    function scanDir(dirPath) {
-      if (!fs.existsSync(dirPath)) return
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    async function scanDir(dirPath) {
+      let entries
+      try {
+        entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
+      } catch (err) {
+        return // Ignore if directory doesn't exist or can't be read
+      }
+
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name)
-        if (entry.isDirectory()) { scanDir(fullPath) }
+        if (entry.isDirectory()) {
+          await scanDir(fullPath)
+        }
         else if (entry.name.endsWith('.md')) {
           try {
-            if (pattern.test(fs.readFileSync(fullPath, 'utf-8'))) {
+            const content = await fs.promises.readFile(fullPath, 'utf-8')
+            if (pattern.test(content)) {
               backlinks.push({ path: path.relative(brainPath, fullPath).replace(/\\/g, '/'), name: entry.name })
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error(`Failed to read markdown file for backlinks at ${fullPath}:`, e)
+          }
         }
       }
     }
-    scanDir(brainPath)
+    await scanDir(brainPath)
     return { backlinks }
   } catch (err) { return { backlinks: [] } }
 })
