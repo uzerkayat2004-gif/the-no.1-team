@@ -19,6 +19,7 @@ const TASK_TYPES = {
 
 // Detect from slash command (highest priority — exact match)
 function detectFromSlash(message) {
+  if (typeof message !== 'string') return null;
   const match = message.match(/^\/(\w+)/);
   if (!match) return null;
   const cmd = match[1].toLowerCase();
@@ -27,6 +28,7 @@ function detectFromSlash(message) {
 
 // Detect from keywords (fallback)
 function detectFromKeywords(message) {
+  if (typeof message !== 'string') return TASK_TYPES.general;
   const msg = message.toLowerCase();
 
   if (msg.includes('quick research') || msg.includes('fast research') || msg.includes('quick search'))
@@ -68,6 +70,9 @@ function detectTaskType(message) {
 
 // Strip slash command from message before sending to agents
 function stripSlashCommand(message) {
+  if (typeof message !== 'string') {
+    return (message === null || message === undefined) ? '' : String(message);
+  }
   return message.replace(/^\/\w+\s*/, '').trim();
 }
 
