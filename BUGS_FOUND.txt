@@ -1,0 +1,7 @@
+Date: 2026-04-26
+Tester: Claude Code
+
+BUG #6: Copy/Paste not working in PTY Terminal ✅ FIXED
+Location: src/main/main.js
+Issue: Electron requires a native Application Menu with "Edit" roles (copy, paste, cut, etc.) for the OS clipboard shortcuts to register correctly inside the app. Without this, pressing Ctrl+C/Ctrl+V inside the xterm.js terminal does nothing.
+Fix Applied: Created a standard Application Menu in main.js using `Menu.buildFromTemplate()` which includes the full 'Edit' menu submenu with roles like 'copy', 'paste', 'undo', and 'redo'. This natively pipes the OS shortcuts directly into xterm.js.

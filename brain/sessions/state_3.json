@@ -1,0 +1,94 @@
+{
+  "sessionId": "saved-3",
+  "sessionNumber": 3,
+  "title": "Session #3",
+  "phase": 6,
+  "brainstormRound": 1,
+  "seniorAgent": null,
+  "redTeamAgent": null,
+  "tabs": [
+    "claude-code"
+  ],
+  "models": {},
+  "messages": [
+    {
+      "id": "q2m2iii8j0d",
+      "sender": {
+        "id": "boss",
+        "name": "Boss",
+        "initials": "B",
+        "color": "#d4a24a",
+        "role": "Team Leader"
+      },
+      "tag": "@All",
+      "text": "[SYSTEM] 🔍 Phase 2: Independent Research — Research the topic independently. Do NOT reference other agents' work.",
+      "time": "11:40 AM"
+    },
+    {
+      "id": "fiu2k0vdjja",
+      "sender": {
+        "id": "boss",
+        "name": "Boss",
+        "initials": "B",
+        "color": "#d4a24a",
+        "role": "Team Leader"
+      },
+      "tag": "@All",
+      "text": "[SYSTEM] 📊 Phase 3: Synthesis — Senior Agent, combine ALL research into ONE document with attribution.",
+      "time": "11:40 AM"
+    },
+    {
+      "id": "vfrjkxfz56c",
+      "sender": {
+        "id": "boss",
+        "name": "Boss",
+        "initials": "B",
+        "color": "#d4a24a",
+        "role": "Team Leader"
+      },
+      "tag": "@All",
+      "text": "[SYSTEM] 💬 Phase 4: Brainstorm — Structured debate begins. Use Position/Evidence/Confidence format. Round 1.",
+      "time": "11:40 AM"
+    },
+    {
+      "id": "fx6oqqw1i6",
+      "sender": {
+        "id": "boss",
+        "name": "Boss",
+        "initials": "B",
+        "color": "#d4a24a",
+        "role": "Team Leader"
+      },
+      "tag": "@All",
+      "text": "[SYSTEM] 🗳️ Phase 5: Consensus — Vote on each point. Majority wins. Ties escalate to Boss.",
+      "time": "11:40 AM"
+    },
+    {
+      "id": "7wwtgbjsv39",
+      "sender": {
+        "id": "boss",
+        "name": "Boss",
+        "initials": "B",
+        "color": "#d4a24a",
+        "role": "Team Leader"
+      },
+      "tag": "@All",
+      "text": "[SYSTEM] 📝 Phase 6: Final Report — Produce the final document and update session memory.",
+      "time": "11:40 AM"
+    },
+    {
+      "id": "gx7bnuxqnug",
+      "sender": {
+        "id": "claude-code",
+        "name": "Claude Code",
+        "initials": "CC",
+        "color": "#e8784a",
+        "role": "Senior Coding Agent"
+      },
+      "tag": "Senior Coding Agent",
+      "text": "API Error: Unable to connect to API (ConnectionRefused)",
+      "time": "11:47 AM"
+    }
+  ],
+  "createdAt": "2026-04-25T06:17:53.521Z"
+}

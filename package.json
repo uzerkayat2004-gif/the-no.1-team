@@ -1,0 +1,37 @@
+{
+  "name": "worlds-number-one-team",
+  "version": "0.1.0",
+  "description": "World's Number One Team — Multi-Agent Research & Coding Organization",
+  "main": "src/main/main.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview"
+  },
+  "keywords": [
+    "multi-agent",
+    "research",
+    "ai",
+    "team",
+    "orchestration"
+  ],
+  "author": "",
+  "license": "MIT",
+  "build": {
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ]
+  },
+  "dependencies": {
+    "docx": "^9.6.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tree-kill": "^1.2.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^35.2.1",
+    "electron-vite": "^5.0.0"
+  }
+}
