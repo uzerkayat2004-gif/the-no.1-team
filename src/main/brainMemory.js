@@ -178,4 +178,4 @@ function getSkillStats() {
   return stats;
 }
 
-module.exports = { saveSession, loadSessionContext, buildResumeBriefing, loadRelevantMemory, updateAgentPerformance, updateSkillPerformance, logError, listSessions, getSkillStats, readFile, writeFile, restoreBackup };
+module.exports = { saveSession, loadSessionContext, buildResumeBriefing, loadRelevantMemory, updateAgentPerformance, updateSkillPerformance, logError, listSessions, getSkillStats, readFile, writeFile, restoreBackup, extractMeta };
