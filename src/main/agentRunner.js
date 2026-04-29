@@ -68,7 +68,7 @@ class AgentRunner extends EventEmitter {
     const procs = this.activeProcesses[sessionId];
     if (!procs) return;
     Object.values(procs).forEach(proc => {
-      try { proc.kill('SIGTERM'); } catch(e) {}
+      try { proc.kill('SIGTERM'); } catch(e) { console.error('Failed to kill agent process:', e); }
     });
     delete this.activeProcesses[sessionId];
     this.emit('session-stopped', { sessionId });
@@ -78,7 +78,7 @@ class AgentRunner extends EventEmitter {
   stopAgent(agentId, sessionId) {
     const procs = this.activeProcesses[sessionId];
     if (!procs || !procs[agentId]) return;
-    try { procs[agentId].kill('SIGTERM'); } catch(e) {}
+    try { procs[agentId].kill('SIGTERM'); } catch(e) { console.error('Failed to kill agent process:', e); }
     delete procs[agentId];
     this.emit('agent-stopped', { agent: agentId, agentId, sessionId });
   }
