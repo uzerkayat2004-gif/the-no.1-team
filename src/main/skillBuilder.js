@@ -526,7 +526,9 @@ function loadRelevantMemory(taskTypeId, rawTask) {
       const content = fs.readFileSync(memoryPath, 'utf-8');
       return content.slice(-500);
     }
-  } catch(e) {}
+  } catch (e) {
+    console.error('Error loading relevant memory:', e);
+  }
   return '';
 }
 
