@@ -29,30 +29,29 @@ function detectFromSlash(message) {
 function detectFromKeywords(message) {
   const msg = message.toLowerCase();
 
-  if (msg.includes('quick research') || msg.includes('fast research') || msg.includes('quick search'))
-    return TASK_TYPES.quick;
-  if (msg.includes('deep research') || msg.includes('thorough research') || msg.includes('full research'))
-    return TASK_TYPES.deep;
-  if (msg.includes('team code') || msg.includes('teamcode') || msg.includes('parallel code') || msg.includes('all agents code'))
-    return TASK_TYPES.teamcode;
-  if (msg.includes('review') && (msg.includes('code') || msg.includes('file')))
-    return TASK_TYPES.review;
-  if (msg.includes('debug') || msg.includes('fix') || msg.includes('error') || msg.includes('bug'))
-    return TASK_TYPES.debug;
-  if (msg.includes('test') && msg.includes('app'))
-    return TASK_TYPES.apptest;
-  if (msg.includes('test') || msg.includes('unit test') || msg.includes('write test'))
-    return TASK_TYPES.test;
-  if (msg.includes('plan') || msg.includes('architect') || msg.includes('design system') || msg.includes('structure'))
-    return TASK_TYPES.plan;
-  if (msg.includes('document') || msg.includes('readme') || msg.includes('summarize file') || msg.includes('convert file'))
-    return TASK_TYPES.doc;
-  if (msg.includes('brainstorm') || msg.includes('chat') || msg.includes('discuss') || msg.includes('idea'))
-    return TASK_TYPES.brainstorm;
-  if (msg.includes('code') || msg.includes('build') || msg.includes('create') || msg.includes('implement') || msg.includes('write'))
-    return TASK_TYPES.code;
-  if (msg.includes('research') || msg.includes('find') || msg.includes('search') || msg.includes('look up') || msg.includes('what is'))
-    return TASK_TYPES.research;
+  const rules = [
+    { type: TASK_TYPES.quick, keywords: ['quick research', 'fast research', 'quick search'] },
+    { type: TASK_TYPES.deep, keywords: ['deep research', 'thorough research', 'full research'] },
+    { type: TASK_TYPES.teamcode, keywords: ['team code', 'teamcode', 'parallel code', 'all agents code'] },
+    { type: TASK_TYPES.review, check: (m) => m.includes('review') && (m.includes('code') || m.includes('file')) },
+    { type: TASK_TYPES.debug, keywords: ['debug', 'fix', 'error', 'bug'] },
+    { type: TASK_TYPES.apptest, check: (m) => m.includes('test') && m.includes('app') },
+    { type: TASK_TYPES.test, keywords: ['test', 'unit test', 'write test'] },
+    { type: TASK_TYPES.plan, keywords: ['plan', 'architect', 'design system', 'structure'] },
+    { type: TASK_TYPES.doc, keywords: ['document', 'readme', 'summarize file', 'convert file'] },
+    { type: TASK_TYPES.brainstorm, keywords: ['brainstorm', 'chat', 'discuss', 'idea'] },
+    { type: TASK_TYPES.code, keywords: ['code', 'build', 'create', 'implement', 'write'] },
+    { type: TASK_TYPES.research, keywords: ['research', 'find', 'search', 'look up', 'what is'] }
+  ];
+
+  for (const rule of rules) {
+    if (rule.check && rule.check(msg)) {
+      return rule.type;
+    }
+    if (rule.keywords && rule.keywords.some(kw => msg.includes(kw))) {
+      return rule.type;
+    }
+  }
 
   return TASK_TYPES.general;
 }
