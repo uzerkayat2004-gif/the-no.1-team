@@ -1,20 +1,28 @@
 const fs   = require('fs');
 const path = require('path');
 const os   = require('os');
+const brainMemorySystem = require('./brainMemory');
 
-const BRAIN_DIR  = path.join(os.homedir(), 'no1team', 'brain');
-const SKILLS_DIR = path.join(BRAIN_DIR, 'skills');
+
+const bundledBrainDir = path.resolve(__dirname, '..', '..', 'brain');
+const userBrainDir    = path.join(os.homedir(), 'no1team', 'brain');
+const BRAIN_DIR       = fs.existsSync(bundledBrainDir) ? bundledBrainDir : userBrainDir;
+const SKILLS_DIR      = path.join(BRAIN_DIR, 'skills');
 
 // ─── BASE RULES ──────────────────────────────────────────────────────────────
 
-function buildBaseRules(agentName, sessionContext) {
-  const agentInstructions = getAgentSpecificInstructions(agentName);
+function buildBaseRules(agentName, sessionContext, providerProfile = null) {
+  const agentInstructions = getAgentSpecificInstructions(agentName, providerProfile);
 
   return `
 === NO. 1 TEAM — AGENT BRIEFING ===
 
 You are ${agentName}, a member of No. 1 Team — a multi-agent AI coordination system.
 
+TASK: ${sessionContext.task || 'Not set'}
+TASK TYPE: ${sessionContext.taskType || 'general'}
+DEPTH LEVEL: ${sessionContext.depth || 2}
+CURRENT PHASE: ${sessionContext.phase || 'phase-0-task-created'}
 YOUR TEAM THIS SESSION: ${(sessionContext.activeAgents || []).join(', ')}
 SENIOR AGENT: ${sessionContext.seniorAgent || 'Not assigned yet'}
 WORKSPACE: ${sessionContext.workDir || '~/no1team/workspace'}
@@ -29,14 +37,22 @@ UNIVERSAL TEAM RULES:
 - If confused, ask maximum ONE clarifying question.
 - Do not repeat what other agents already said correctly.
 - Quality over speed. Do it right the first time.
+- Follow the active phase exactly; do not skip ahead unless prompt says so.
+- Use Confidence: X/10 for key findings and flag anything below 6/10.
+- For coding, edit files directly, run verification, and return the required code summary.
 
 `;
 }
 
 // ─── AGENT-SPECIFIC ABILITY INSTRUCTIONS ─────────────────────────────────────
 
-function getAgentSpecificInstructions(agentName) {
-  const name = agentName.toLowerCase();
+function getAgentSpecificInstructions(agentName, providerProfile = null) {
+  const name = (agentName || '').toLowerCase();
+  const capabilities = providerProfile?.researchCapabilities || {};
+  const hasConfirmedWeb = capabilities.webSearch === 'native' || capabilities.webSearch === 'app-provided';
+  const researchAbility = hasConfirmedWeb
+    ? 'For research tasks, use live web/search/grounding tools and cite source URLs.'
+    : 'For current research tasks, do not claim live web access unless your CLI actually provides it in this run. If no live source tool is available, say NO_WEB_ACCESS instead of answering from memory.';
 
   if (name.includes('claude')) {
     return `
@@ -45,9 +61,7 @@ You are running as Claude Code CLI. You have access to ALL of your native abilit
 USE THEM FULLY. Do not hold back.
 
 YOUR NATIVE ABILITIES — USE ALL OF THEM:
-1. WEB SEARCH: You can search the internet in real time. For ANY research task,
-   use your web search tool to find current, accurate information. Do not rely
-   on training data alone when you can search for fresh information.
+1. RESEARCH ACCESS: ${researchAbility}
 
 2. BASH EXECUTION: You can run terminal commands directly. For coding tasks,
    run the code to test it. Run tests. Check if files exist. Install packages.
@@ -112,8 +126,7 @@ YOUR FOCUS:
 - Test everything before marking done
 - When in doubt, write more tests
 
-FOR RESEARCH TASKS: You research by reading documentation, source code,
-and technical specs. You find the most technically accurate information.
+FOR RESEARCH TASKS: ${researchAbility}
 You are the fact-checker for technical claims.
 `;
   }
@@ -130,9 +143,7 @@ YOUR NATIVE ABILITIES — USE ALL OF THEM:
    Analyze multiple long documents simultaneously.
    This is your biggest advantage — use it aggressively.
 
-2. WEB SEARCH & GROUNDING: Search the internet for every research task.
-   Use Google's search grounding to find current, accurate information.
-   Always cite your sources with URLs.
+2. RESEARCH ACCESS: ${researchAbility}
 
 3. MULTIMODAL: You can analyze images, diagrams, and visual content.
    If there are screenshots, UI mockups, or diagrams in the workspace — read them.
@@ -520,37 +531,86 @@ If the task type is unclear, ask ONE specific clarifying question.
 };
 
 function loadRelevantMemory(taskTypeId, rawTask) {
-  try {
-    const memoryPath = path.join(BRAIN_DIR, 'memory', 'learnings.md');
-    if (fs.existsSync(memoryPath)) {
-      const content = fs.readFileSync(memoryPath, 'utf-8');
-      return content.slice(-500);
-    }
-  } catch (e) {
-    console.error('Error loading relevant memory:', e);
-  }
-  return '';
+  return brainMemorySystem.loadRelevantMemory(taskTypeId, rawTask);
 }
 
-function injectSkill(agentName, taskTypeId, rawTask, sessionContext) {
-  const brainMemory  = loadRelevantMemory(taskTypeId, rawTask);
-  const baseRules    = buildBaseRules(agentName, sessionContext);
-  const taskSkill    = TASK_SKILLS[taskTypeId] || TASK_SKILLS.general;
+function buildTaskSkill(taskTypeId, providerProfile) {
+  const taskSkill = TASK_SKILLS[taskTypeId] || TASK_SKILLS.general;
+  const capabilities = providerProfile?.researchCapabilities || {};
+  const hasConfirmedWeb = capabilities.webSearch === 'native' || capabilities.webSearch === 'app-provided';
+  if (hasConfirmedWeb) return taskSkill;
+
+  return taskSkill
+    .replace(/USE YOUR WEB SEARCH TOOL immediately\. Do not answer from memory alone\./g, 'Use live web/search/grounding only if available in this CLI run. If unavailable, respond with NO_WEB_ACCESS.')
+    .replace(/USE YOUR WEB SEARCH TOOL\. Search multiple sources\./g, 'Use live web/search/grounding only if available in this CLI run. If unavailable, respond with NO_WEB_ACCESS.')
+    .replace(/USE YOUR WEB SEARCH TOOL extensively\. Search many angles of the topic\./g, 'Use live web/search/grounding only if available in this CLI run. If unavailable, respond with NO_WEB_ACCESS.')
+    .replace(/USE WEB SEARCH to research best practices for this type of project/g, 'Use live web/search only if available; otherwise rely on local code/context and mark current external claims as unverified');
+}
+
+function buildResearchContract(sessionContext, providerProfile) {
+  const policy = sessionContext?.researchPolicy;
+  if (!policy?.requiresCurrentResearch) return '';
+
+  const capabilities = providerProfile?.researchCapabilities || {};
+  const hasConfirmedWeb = capabilities.webSearch === 'native' || capabilities.webSearch === 'app-provided';
+  if (hasConfirmedWeb) {
+    return `
+=== CURRENT RESEARCH CONTRACT ===
+This task requires current/live research as of today.
+Use live web/search/grounding tools before answering.
+Do not answer current facts from memory.
+Every factual claim about current state must cite a source URL.
+Minimum source URLs required: ${policy.minSources || 1}.
+If live search fails, write WEB_RESEARCH_FAILED and explain why.
+End successful research with [RESEARCH DONE].
+=== END CURRENT RESEARCH CONTRACT ===
+
+`;
+  }
+
+  return `
+=== NO_WEB_ACCESS CONTRACT ===
+This task requires current/live research, but this provider profile does not guarantee live web access.
+Do NOT present current facts from memory.
+If you cannot use a live search/browser/grounding tool, respond with: NO_WEB_ACCESS: unable to verify current facts.
+Do not fabricate URLs or citations.
+You may only analyze user-provided sources or clearly marked non-current background knowledge.
+End blocked research with [RESEARCH BLOCKED].
+=== END NO_WEB_ACCESS CONTRACT ===
+
+`;
+}
+
+function injectSkill(agentName, taskTypeId, rawTask, sessionContext, providerProfile = null) {
+  const brainMemory  = sessionContext?.brainMemory || loadRelevantMemory(taskTypeId, rawTask);
+  const baseRules    = buildBaseRules(agentName, sessionContext, providerProfile);
+  const taskSkill    = buildTaskSkill(taskTypeId, providerProfile);
+  const researchContract = buildResearchContract(sessionContext, providerProfile);
 
   const memoryBlock = brainMemory
     ? `\n=== RELEVANT MEMORY FROM PAST SESSIONS ===\n${brainMemory}\n=== END MEMORY ===\n\n`
+    : '';
+
+  const extraMemoryBlock = sessionContext?.extraMemory
+    ? `\n=== ADDITIONAL MEMORY ===\n${sessionContext.extraMemory}\n=== END ADDITIONAL MEMORY ===\n\n`
     : '';
 
   const resumeBlock = sessionContext?.resumeBriefing
     ? `\n=== RESUMING PREVIOUS SESSION ===\n${sessionContext.resumeBriefing}\n=== END RESUME ===\n\n`
     : '';
 
-  return `${baseRules}${memoryBlock}${resumeBlock}${taskSkill}\n=== END BRIEFING — BEGIN TASK ===\n\n${rawTask}`;
+  const taskBlock = rawTask
+    ? `\n=== YOUR TASK ===\n${rawTask}\n=== END TASK ===\n`
+    : '';
+
+  return `${baseRules}${memoryBlock}${extraMemoryBlock}${resumeBlock}${researchContract}${taskSkill}\n=== END BRIEFING — BEGIN TASK ===\n${taskBlock}`;
 }
 
 function buildSkillBriefing(agentName, taskTypeId, sessionContext, brainMemory = '') {
-  // Legacy support, if any old code relies on this
-  return injectSkill(agentName, taskTypeId, '', sessionContext);
+  const enrichedContext = brainMemory
+    ? { ...sessionContext, extraMemory: brainMemory }
+    : sessionContext;
+  return injectSkill(agentName, taskTypeId, '', enrichedContext);
 }
 
 module.exports = { injectSkill, buildSkillBriefing, TASK_SKILLS };

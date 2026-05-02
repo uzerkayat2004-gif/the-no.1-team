@@ -6,7 +6,7 @@ const agentRunner = require('./agentRunner')
 const { loadProxySettings, saveProxySettings } = require('./proxySettings')
 const { detectTaskType, stripSlashCommand, TASK_TYPES } = require('./taskDetector')
 const { injectSkill } = require('./skillBuilder')
-const { getAllProfiles, getSerializableProfiles } = require('./providerProfiles')
+const { getAllProfiles, getSerializableProfiles, normalizeExecutionMode, getProfileForMode } = require('./providerProfiles')
 const sessionCtx = require('./sessionContext')
 const pipelineManager = require('./pipelineManager')
 const collaborationManager = require('./collaborationManager')
@@ -304,30 +304,36 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
    ═══════════════════════════ */
 
 ipcMain.on('boss-send-task', (event, payload) => {
-  const { message, sessionId, agents, models, mode } = payload
+  const { message, sessionId, agents, models, executionModes, mode } = payload
+  const profiles = getAllProfiles()
+  const normalizedExecutionModes = {}
+  agents.forEach(agentId => {
+    normalizedExecutionModes[agentId] = normalizeExecutionMode(agentId, executionModes?.[agentId])
+  })
+
   let context = sessionCtx.getSession(sessionId)
-  if (!context) context = sessionCtx.createSession(sessionId, { activeAgents: agents, mode })
+  if (!context) context = sessionCtx.createSession(sessionId, { activeAgents: agents, mode, executionModes: normalizedExecutionModes })
 
   const { taskType, fromSlash } = detectTaskType(message)
   const cleanTask = fromSlash ? stripSlashCommand(message) : message
 
-  sessionCtx.updateSession(sessionId, { taskType: taskType.id })
+  sessionCtx.updateSession(sessionId, { taskType: taskType.id, executionModes: normalizedExecutionModes })
+  context = sessionCtx.getSession(sessionId)
   sessionCtx.addToHistory(sessionId, { sender: 'BOSS', content: cleanTask })
 
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('task-type-detected', { sessionId, taskType, fromSlash, message: cleanTask })
   }
 
-  const profiles = getAllProfiles()
   agents.forEach(agentId => {
-    const profile = profiles[agentId]
+    const profile = getProfileForMode(agentId, normalizedExecutionModes[agentId]) || profiles[agentId]
     if (!profile) return
     const model = models[agentId] || profile.defaultModel
     const workDir = context?.workDir || null
     const fullPrompt = injectSkill(profile.name, taskType.id, cleanTask, {
       ...context, sessionId, activeAgents: agents.map(id => profiles[id]?.name || id),
-    })
-    agentRunner.sendToAgent({ task: fullPrompt, workDir, agent: agentId, model, sessionId })
+    }, profile)
+    agentRunner.sendToAgent({ task: fullPrompt, workDir, agent: agentId, model, executionMode: normalizedExecutionModes[agentId], sessionId })
   })
 })
 
@@ -375,8 +381,8 @@ ipcMain.handle('get-task-types', () => TASK_TYPES)
 function sendToRenderer(channel, data) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data)
 }
-agentRunner.on('agent-chunk', data => { if (!data.silent) sendToRenderer('agent-chunk', data) })
-agentRunner.on('agent-done', data => { if (!data.silent) sendToRenderer('agent-done', data) })
+agentRunner.on('agent-chunk', data => sendToRenderer('agent-chunk', data))
+agentRunner.on('agent-done', data => sendToRenderer('agent-done', data))
 agentRunner.on('agent-error', data => sendToRenderer('agent-error', data))
 agentRunner.on('agent-stopped', data => sendToRenderer('agent-stopped', data))
 agentRunner.on('session-stopped', data => sendToRenderer('session-stopped', data))
@@ -615,8 +621,12 @@ ipcMain.handle('session:getNextNumber', async () => {
   try {
     const sessDir = getSessionsPath()
     if (!fs.existsSync(sessDir)) fs.mkdirSync(sessDir, { recursive: true })
-    const files = fs.readdirSync(sessDir).filter(f => f.match(/^session_\d+\.md$/))
-    const numbers = files.map(f => parseInt(f.match(/session_(\d+)/)[1]))
+    const mdFiles = fs.readdirSync(sessDir).filter(f => f.match(/^session_\d+\.md$/))
+    const stateFiles = fs.readdirSync(sessDir).filter(f => f.match(/^state_\d+\.json$/))
+    const numbers = [
+      ...mdFiles.map(f => parseInt(f.match(/session_(\d+)/)[1])),
+      ...stateFiles.map(f => parseInt(f.match(/state_(\d+)/)[1]))
+    ]
     return { number: numbers.length > 0 ? Math.max(...numbers) + 1 : 1 }
   } catch (err) { return { number: 1 } }
 })
@@ -657,16 +667,36 @@ ipcMain.handle('session:list', async () => {
   try {
     const sessDir = getSessionsPath()
     if (!fs.existsSync(sessDir)) return { sessions: [] }
-    const files = fs.readdirSync(sessDir).filter(f => f.match(/^session_\d+\.md$/))
-    const sessions = files.map(f => {
+    const stateFiles = fs.readdirSync(sessDir).filter(f => f.match(/^state_\d+\.json$/))
+    const sessions = stateFiles.map(f => {
+      const num = parseInt(f.match(/state_(\d+)/)[1])
+      try {
+        const state = JSON.parse(fs.readFileSync(path.join(sessDir, f), 'utf-8'))
+        return { number: num, task: state.title || `Session ${num}`, lastUpdated: state.lastUpdated || '', createdAt: state.lastUpdated || '', agents: [] }
+      } catch (e) {
+        return { number: num, task: `Session ${num}`, lastUpdated: '', createdAt: '', agents: [] }
+      }
+    })
+
+    const mdFiles = fs.readdirSync(sessDir).filter(f => f.match(/^session_\d+\.md$/))
+    mdFiles.forEach(f => {
       const num = parseInt(f.match(/session_(\d+)/)[1])
-      const content = fs.readFileSync(path.join(sessDir, f), 'utf-8')
-      const taskMatch = content.match(/\*\*Task:\*\* (.+)/)
-      const dateMatch = content.match(/\*\*Last Updated:\*\* (.+)/)
-      const createdMatch = content.match(/\*\*Created:\*\* (.+)/)
-      return { number: num, task: taskMatch?.[1] || 'Unknown', lastUpdated: dateMatch?.[1] || '', createdAt: createdMatch?.[1] || '', agents: [] }
-    }).sort((a, b) => b.number - a.number)
-    return { sessions }
+      if (!sessions.find(s => s.number === num)) {
+        const content = fs.readFileSync(path.join(sessDir, f), 'utf-8')
+        const taskMatch = content.match(/\*\*Task:\*\* (.+)/)
+        const dateMatch = content.match(/\*\*Last Updated:\*\* (.+)/)
+        const createdMatch = content.match(/\*\*Created:\*\* (.+)/)
+        sessions.push({
+          number: num,
+          task: taskMatch?.[1] || 'Unknown',
+          lastUpdated: dateMatch?.[1] || '',
+          createdAt: createdMatch?.[1] || '',
+          agents: []
+        })
+      }
+    })
+
+    return { sessions: sessions.sort((a, b) => b.number - a.number) }
   } catch (err) { return { sessions: [] } }
 })
 

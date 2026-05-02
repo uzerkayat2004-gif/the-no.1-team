@@ -163,8 +163,8 @@ export default function App() {
   // Create new session
   async function createSession() {
     const api = window.teamAPI
-    if (!api?.session?.getNextNumber) return
-    const { number } = await api.session.getNextNumber()
+    const result = await api?.session?.getNextNumber?.()
+    const number = result?.number ?? Math.max(0, ...sessions.map(s => s.number || 0)) + 1
     const newSession = {
       id: `session-${number}`,
       number,

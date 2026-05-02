@@ -61,13 +61,36 @@ function detectFromKeywords(message) {
   return TASK_TYPES.general;
 }
 
+function detectResearchPolicy(message, taskType) {
+  const taskId = typeof taskType === 'string' ? taskType : taskType?.id;
+  const msg = typeof message === 'string' ? message.toLowerCase() : '';
+  const freshnessTerms = [
+    'latest', 'current', 'today', 'live', 'now', 'recent', 'news', 'pricing',
+    'docs', 'documentation', 'api', 'version', 'release', 'released', '2026'
+  ];
+  const freshnessRequired = freshnessTerms.some(term => new RegExp(`\\b${term}\\b`, 'i').test(msg));
+  const researchDepth = { quick: 1, research: 3, deep: 5 };
+  const isResearchTask = Object.prototype.hasOwnProperty.call(researchDepth, taskId);
+  const planOrGeneralNeedsResearch = ['plan', 'general'].includes(taskId) && freshnessRequired;
+  const requiresCurrentResearch = isResearchTask || planOrGeneralNeedsResearch;
+
+  return {
+    requiresCurrentResearch,
+    requireUrls: requiresCurrentResearch,
+    minSources: isResearchTask ? researchDepth[taskId] : (requiresCurrentResearch ? 2 : 0),
+    freshnessRequired: requiresCurrentResearch,
+    staleFactsForbidden: requiresCurrentResearch,
+    depth: isResearchTask ? taskId : null,
+  };
+}
+
 // Main detection function
 function detectTaskType(message) {
   const fromSlash = detectFromSlash(message);
-  if (fromSlash) return { taskType: fromSlash, fromSlash: true };
+  if (fromSlash) return { taskType: fromSlash, fromSlash: true, researchPolicy: detectResearchPolicy(message, fromSlash) };
 
   const fromKeywords = detectFromKeywords(message);
-  return { taskType: fromKeywords, fromSlash: false };
+  return { taskType: fromKeywords, fromSlash: false, researchPolicy: detectResearchPolicy(message, fromKeywords) };
 }
 
 // Strip slash command from message before sending to agents
@@ -78,4 +101,11 @@ function stripSlashCommand(message) {
   return message.replace(/^\/\w+\s*/, '').trim();
 }
 
-module.exports = { detectTaskType, stripSlashCommand, TASK_TYPES };
+// Check if a slash command message has an actual topic after the command
+function hasTopicAfterSlash(message) {
+  if (typeof message !== 'string') return false;
+  const stripped = message.replace(/^\/\w+\s*/, '').trim();
+  return stripped.length > 0;
+}
+
+module.exports = { detectTaskType, detectResearchPolicy, stripSlashCommand, hasTopicAfterSlash, TASK_TYPES };

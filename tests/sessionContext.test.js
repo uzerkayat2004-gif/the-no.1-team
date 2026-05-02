@@ -20,7 +20,11 @@ test('sessionContext tests', async (t) => {
     assert.deepStrictEqual(session.activeAgents, []);
     assert.strictEqual(session.workDir, null);
     assert.strictEqual(session.mode, 'manual');
-    assert.strictEqual(session.phase, 'idle');
+    assert.strictEqual(session.phase, 'phase-0-task-created');
+    assert.strictEqual(session.researchPolicy, null);
+    assert.deepStrictEqual(session.researchValidation, {});
+    assert.deepStrictEqual(session.providerCapabilities, {});
+    assert.deepStrictEqual(session.executionModes, {});
     assert.deepStrictEqual(session.history, []);
     assert.strictEqual(session.round, 0);
     assert.ok(session.createdAt, 'createdAt should be defined');
@@ -37,7 +41,11 @@ test('sessionContext tests', async (t) => {
       activeAgents: ['AgentA', 'AgentB'],
       workDir: '/tmp/test',
       mode: 'auto',
-      phase: 'working'
+      phase: 'working',
+      researchPolicy: { requiresCurrentResearch: true, minSources: 3 },
+      researchValidation: { summary: { ready: 1 } },
+      providerCapabilities: { claude: { webSearch: 'unknown' } },
+      executionModes: { claude: 'native', codex: 'proxy' }
     };
 
     const session = createSession(sessionId, data);
@@ -49,6 +57,10 @@ test('sessionContext tests', async (t) => {
     assert.strictEqual(session.workDir, '/tmp/test');
     assert.strictEqual(session.mode, 'auto');
     assert.strictEqual(session.phase, 'working');
+    assert.deepStrictEqual(session.researchPolicy, { requiresCurrentResearch: true, minSources: 3 });
+    assert.deepStrictEqual(session.researchValidation, { summary: { ready: 1 } });
+    assert.deepStrictEqual(session.providerCapabilities, { claude: { webSearch: 'unknown' } });
+    assert.deepStrictEqual(session.executionModes, { claude: 'native', codex: 'proxy' });
 
     // Cleanup
     clearSession(sessionId);

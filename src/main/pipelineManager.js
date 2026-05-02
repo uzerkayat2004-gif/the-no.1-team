@@ -4,8 +4,26 @@
 const { EventEmitter } = require('events');
 const agentRunner      = require('./agentRunner');
 const { injectSkill }  = require('./skillBuilder');
-const { getAllProfiles } = require('./providerProfiles');
+const { getAllProfiles, normalizeExecutionMode, getProfileForMode } = require('./providerProfiles');
 const sessionCtx       = require('./sessionContext');
+const collaborationManager = require('./collaborationManager');
+const { detectResearchPolicy } = require('./taskDetector');
+
+const DEPTH_BY_TASK = {
+  quick: 1,
+  research: 2,
+  deep: 3,
+  plan: 2,
+  code: 2,
+  teamcode: 3,
+  review: 2,
+  debug: 2,
+  test: 2,
+  apptest: 2,
+  doc: 1,
+  brainstorm: 2,
+  general: 1,
+};
 
 class PipelineManager extends EventEmitter {
   constructor() {
@@ -13,14 +31,41 @@ class PipelineManager extends EventEmitter {
     this.pipelines = {};
   }
 
-  async startPipeline({ sessionId, taskType, task, agents, models, workDir, mode, seniorAgent }) {
+  async startPipeline({ sessionId, taskType, task, agents, models, subagentModels, executionModes, workDir, mode, seniorAgent }) {
+    // Validate topic — do not run pipeline with empty task
+    if (!task || task.trim().length < 3) {
+      this.emit('system-message', { sessionId, message: '⚠️ No topic provided. Please type your topic and send again.' });
+      this.emit('pipeline-cancelled', { sessionId, reason: 'No topic provided' });
+      return;
+    }
+
+    const profiles = getAllProfiles();
+    const normalizedExecutionModes = {};
+    agents.forEach(agentId => {
+      normalizedExecutionModes[agentId] = normalizeExecutionMode(agentId, executionModes?.[agentId]);
+    });
+    if (!sessionCtx.getSession(sessionId)) {
+      sessionCtx.createSession(sessionId, {
+        sessionId,
+        activeAgents: agents.map(id => profiles[id]?.name || id),
+        mode,
+        seniorAgent,
+        workDir,
+        executionModes: normalizedExecutionModes,
+      });
+    }
+
+    const depth = DEPTH_BY_TASK[taskType] || 2;
     const pipeline = {
-      sessionId, taskType, task, agents, models, workDir, mode, seniorAgent,
-      phase: 'start', researchData: {}, combinedDoc: null,
-      brainstormLog: [], finalAnswer: null, sendBackCount: 0, waitingForBoss: false,
+      sessionId, taskType, task, depth, agents, models: models || {}, subagentModels: subagentModels || {},
+      executionModes: normalizedExecutionModes,
+      workDir, mode, seniorAgent: seniorAgent || agents[0],
+      researchPolicy: detectResearchPolicy(task, taskType), researchValidation: {},
+      phase: 'phase-0-task-created', researchData: {}, combinedDoc: null,
+      brainstormLog: [], decisions: [], finalAnswer: null, sendBackCount: 0, waitingForBoss: false,
     };
     this.pipelines[sessionId] = pipeline;
-    sessionCtx.updateSession(sessionId, { taskType, seniorAgent, phase: 'start' });
+    sessionCtx.updateSession(sessionId, { task, taskType, depth, seniorAgent: pipeline.seniorAgent, workDir, phase: pipeline.phase, researchPolicy: pipeline.researchPolicy, executionModes: pipeline.executionModes });
     this.emit('pipeline-start', { sessionId, taskType, task });
 
     switch(taskType) {
@@ -73,11 +118,19 @@ class PipelineManager extends EventEmitter {
 
   _checkpoint(pipeline, checkpointData) {
     return new Promise((resolve) => {
-      if (pipeline.mode === 'auto') {
-        this.emit('auto-approved', { sessionId: pipeline.sessionId, message: checkpointData.message });
+      // In auto mode, skip ONLY low-stakes intermediate checkpoints.
+      // NEVER auto-approve research-complete — always wait for Boss review.
+      const autoSkipTypes = ['plan-approval', 'plans-ready', 'diagnosis-complete'];
+      if (pipeline.mode === 'auto' && autoSkipTypes.includes(checkpointData.type)) {
+        this.emit('auto-approved', {
+          sessionId: pipeline.sessionId,
+          message: checkpointData.message
+        });
         resolve('approved');
         return;
       }
+      // All other checkpoints — including research-complete and final-answer —
+      // ALWAYS require Boss input regardless of mode.
       pipeline.waitingForBoss = true;
       pipeline._resolveCheckpoint = resolve;
       this.emit('checkpoint', { sessionId: pipeline.sessionId, ...checkpointData });
@@ -89,28 +142,54 @@ class PipelineManager extends EventEmitter {
       const profiles = getAllProfiles();
       const agentName = profiles[agentId]?.name || agentId;
       let fullResponse = '';
+      let lastError = '';
+      let resolved = false;
+      const finish = (content) => {
+        if (resolved) return;
+        resolved = true;
+        agentRunner.removeListener('agent-chunk', onChunk);
+        agentRunner.removeListener('agent-error', onError);
+        agentRunner.removeListener('agent-done', onDone);
+        clearTimeout(timeout);
+        resolve({ agentId, agentName, content: content.trim() });
+      };
       const onChunk = (data) => {
         if (data.sessionId === pipeline.sessionId && data.agentId === agentId) fullResponse += data.content;
       };
+      const onError = (data) => {
+        if (data.sessionId === pipeline.sessionId && data.agentId === agentId) lastError = data.error;
+      };
       const onDone = (data) => {
         if (data.sessionId === pipeline.sessionId && data.agentId === agentId) {
-          agentRunner.removeListener('agent-chunk', onChunk);
-          agentRunner.removeListener('agent-done', onDone);
-          resolve({ agentId, agentName, content: fullResponse.trim() });
+          const content = fullResponse.trim() || (lastError ? `⚠️ ${agentName} failed: ${lastError}` : `⚠️ ${agentName} finished without a response.`);
+          finish(content);
         }
       };
+      const timeout = setTimeout(() => {
+        finish(fullResponse || `⚠️ ${agentName} timed out before replying.`);
+      }, options.timeoutMs || 120000);
       agentRunner.on('agent-chunk', onChunk);
+      agentRunner.on('agent-error', onError);
       agentRunner.on('agent-done', onDone);
-      agentRunner.sendToAgent({ task: prompt, workDir: pipeline.workDir, agent: agentId,
-        model: pipeline.models[agentId], sessionId: pipeline.sessionId, silent: options.silent });
+      const proc = agentRunner.sendToAgent({ task: prompt, workDir: pipeline.workDir, agent: agentId,
+        model: pipeline.models?.[agentId], subagentModel: pipeline.subagentModels?.[agentId],
+        executionMode: pipeline.executionModes?.[agentId],
+        sessionId: pipeline.sessionId, silent: options.silent });
+      if (!proc) finish(`⚠️ ${agentName} could not be started.`);
     });
   }
 
   _runAllAgentsCapture(pipeline, buildPrompt, options = {}) {
     return Promise.all(pipeline.agents.map(agentId => {
-      const profiles = getAllProfiles();
-      const prompt = buildPrompt(agentId, profiles[agentId]?.name || agentId);
-      return this._runAgentCapture(pipeline, agentId, prompt, options);
+      const profile = this._getProviderProfile(pipeline, agentId);
+      const agentName = profile?.name || agentId;
+      const prompt = buildPrompt(agentId, agentName, profile);
+      return this._runAgentCapture(pipeline, agentId, prompt, options)
+        .catch(err => {
+          // If one agent fails, don't fail the whole pipeline
+          console.error(`[Pipeline] Agent ${agentName} failed:`, err);
+          return { agentId, agentName, content: `[${agentName} could not complete — ${err.message || 'unknown error'}]`, failed: true };
+        });
     }));
   }
 
@@ -118,25 +197,128 @@ class PipelineManager extends EventEmitter {
     return results.map(r => `\n=== ${r.agentName} ===\n${r.content}\n`).join('\n');
   }
 
+  _extractUrls(text) {
+    const matches = String(text || '').match(/https?:\/\/[^\s)\]}>"]+/g) || [];
+    return [...new Set(matches.map(url => url.replace(/[.,;:]+$/, '')))];
+  }
+
+  _validateResearchResult(result, policy, providerProfile) {
+    if (!policy?.requiresCurrentResearch) {
+      return { ok: true, status: 'ready', urlCount: 0, urls: [], issues: [] };
+    }
+
+    const content = result?.content || '';
+    const lower = content.toLowerCase();
+    const urls = this._extractUrls(content).filter(url => !/example\.com|source\.com|\[link\]|citation-needed/i.test(url));
+    const issues = [];
+    const webSearch = providerProfile?.researchCapabilities?.webSearch || 'unknown';
+    const noWebAccess = lower.includes('no_web_access') || lower.includes('[research blocked]');
+    const staleMemory = [
+      'as of my last update',
+      'i cannot browse',
+      'cannot browse',
+      'no access to current',
+      'do not have access to current',
+    ].some(phrase => lower.includes(phrase));
+
+    if (noWebAccess) {
+      return { ok: false, status: 'blocked', urlCount: urls.length, urls, issues: ['Provider reported no live web access.'] };
+    }
+    if (staleMemory) issues.push('Output contains stale-memory/no-browser language.');
+    if (policy.requireUrls && urls.length < (policy.minSources || 1)) {
+      issues.push(`Expected at least ${policy.minSources || 1} source URL(s), found ${urls.length}.`);
+    }
+    if (webSearch !== 'native' && webSearch !== 'app-provided') {
+      issues.push('Provider web access is not confirmed by app configuration.');
+    }
+
+    const ok = issues.length === 0;
+    return { ok, status: ok ? 'ready' : 'failed', urlCount: urls.length, urls, issues };
+  }
+
+  _validateResearchBatch(results, policy, profiles) {
+    const byAgent = {};
+    results.forEach(result => {
+      byAgent[result.agentId] = this._validateResearchResult(result, policy, profiles[result.agentId]);
+    });
+    const summary = Object.values(byAgent).reduce((acc, item) => {
+      acc[item.status] = (acc[item.status] || 0) + 1;
+      acc.totalSources += item.urlCount || 0;
+      return acc;
+    }, { ready: 0, failed: 0, blocked: 0, warning: 0, totalSources: 0 });
+    return { byAgent, summary };
+  }
+
+  _readyResearchResults(results, validation) {
+    if (!validation?.byAgent) return results;
+    return results.filter(result => validation.byAgent[result.agentId]?.status === 'ready');
+  }
+
+  async _stopIfNoReadyResearch(pipeline, readyResults) {
+    if (!pipeline.researchPolicy?.requiresCurrentResearch || readyResults.length > 0) return false;
+    const summary = pipeline.researchValidation?.summary || {};
+    pipeline.finalAnswer = `Research blocked: no agent produced validation-ready current research. Ready: ${summary.ready || 0}, blocked: ${summary.blocked || 0}, failed: ${summary.failed || 0}, validated source URLs: ${summary.totalSources || 0}.`;
+    await this._checkpoint(pipeline, {
+      type: 'research-validation-failed',
+      message: 'Research Validation Failed',
+      description: pipeline.finalAnswer,
+      buttons: ['Cancel ❌'],
+    });
+    this.emit('pipeline-cancelled', { sessionId: pipeline.sessionId, reason: pipeline.finalAnswer });
+    return true;
+  }
+
+  _setPhase(pipeline, phase, label) {
+    pipeline.phase = phase;
+    sessionCtx.updateSession(pipeline.sessionId, { phase, decisions: pipeline.decisions });
+    if (label) this._emitRoundHeader(pipeline.sessionId, label);
+  }
+
+  _phasePrompt(pipeline, phaseName, body) {
+    return `PHASE: ${phaseName}\nBoss task: ${pipeline.task}\nDepth level: ${pipeline.depth}\nSenior agent: ${pipeline.seniorAgent}\n\n${body}`;
+  }
+
+  _recordDecision(pipeline, decision) {
+    pipeline.decisions.push({ decision, timestamp: new Date().toISOString() });
+    sessionCtx.updateSession(pipeline.sessionId, { decisions: pipeline.decisions });
+  }
+
   _emitRoundHeader(sessionId, label) { this.emit('round-header', { sessionId, label }); }
   _emitSystem(sessionId, message) { this.emit('system-message', { sessionId, message }); }
+
+  _getProviderProfile(pipeline, agentId) {
+    return getProfileForMode(agentId, pipeline.executionModes?.[agentId]) || getAllProfiles()[agentId];
+  }
+
+  _getProviderProfiles(pipeline) {
+    const profiles = getAllProfiles();
+    Object.keys(profiles).forEach(agentId => {
+      profiles[agentId] = this._getProviderProfile(pipeline, agentId);
+    });
+    return profiles;
+  }
 
   // ── QUICK RESEARCH ──
   async _runQuickResearch(pipeline) {
     const { sessionId, task, seniorAgent } = pipeline;
     this._emitRoundHeader(sessionId, '⚡ Quick Research — Starting');
     const results = await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
-      injectSkill(agentName, 'quick', task, sessionCtx.getSession(sessionId)),
+      injectSkill(agentName, 'quick', task, sessionCtx.getSession(sessionId), this._getProviderProfile(pipeline, agentId)),
       { silent: true }
     );
     results.forEach(r => { pipeline.researchData[r.agentId] = r.content; });
-    this.emit('research-ready', { sessionId, researchData: pipeline.researchData });
+    const profiles = this._getProviderProfiles(pipeline);
+    pipeline.researchValidation = this._validateResearchBatch(results, pipeline.researchPolicy, profiles);
+    sessionCtx.updateSession(sessionId, { researchValidation: pipeline.researchValidation });
+    this.emit('research-ready', { sessionId, researchData: pipeline.researchData, researchValidation: pipeline.researchValidation });
+    const readyResults = this._readyResearchResults(results, pipeline.researchValidation);
+    if (await this._stopIfNoReadyResearch(pipeline, readyResults)) return;
 
     this._emitRoundHeader(sessionId, '📋 Combining Results...');
     const final = await this._runAgentCapture(pipeline, seniorAgent,
-      injectSkill(getAllProfiles()[seniorAgent]?.name || seniorAgent, 'quick',
-        `Combine these research results into one clean bullet-point summary.\n${this._flagConfidence(results)}`,
-        sessionCtx.getSession(sessionId)),
+      injectSkill(profiles[seniorAgent]?.name || seniorAgent, 'quick',
+        `Combine ONLY validation-ready research into one clean bullet-point summary. Do not use failed or NO_WEB_ACCESS content as factual evidence. Every final bullet must include a source URL.\n${this._flagConfidence(readyResults)}`,
+        sessionCtx.getSession(sessionId), profiles[seniorAgent]),
       { silent: true }
     );
     pipeline.finalAnswer = final.content;
@@ -151,42 +333,79 @@ class PipelineManager extends EventEmitter {
 
   // ── MID RESEARCH ──
   async _runMidResearch(pipeline) {
-    const { sessionId, task, seniorAgent } = pipeline;
-    this._emitRoundHeader(sessionId, '🔍 Round 1 — Independent Research');
+    let { sessionId, task, seniorAgent } = pipeline;
+    seniorAgent = seniorAgent || pipeline.agents[0];
+    this._setPhase(pipeline, 'phase-2-independent-research', '🔍 Phase 2 — Independent Research');
     const results = await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
-      injectSkill(agentName, 'research', task, sessionCtx.getSession(sessionId)),
+      injectSkill(agentName, 'research', this._phasePrompt(pipeline, 'Phase 2 — Independent Research',
+        `Research independently. Do not reference other agents.\nReturn findings, sources, and Confidence: X/10 per major finding.\nFlag low-confidence items below 6/10.\n\nResearch question:\n${task}`), sessionCtx.getSession(sessionId), this._getProviderProfile(pipeline, agentId)),
       { silent: true }
     );
     results.forEach(r => { pipeline.researchData[r.agentId] = r.content; });
-    this.emit('research-ready', { sessionId, researchData: pipeline.researchData });
+    const profiles = this._getProviderProfiles(pipeline);
+    pipeline.researchValidation = this._validateResearchBatch(results, pipeline.researchPolicy, profiles);
+    sessionCtx.updateSession(sessionId, { researchValidation: pipeline.researchValidation });
+    this.emit('research-ready', { sessionId, researchData: pipeline.researchData, researchValidation: pipeline.researchValidation });
 
     const c1 = await this._checkpoint(pipeline, { type: 'research-complete', message: '🔍 Research Complete',
       description: 'All agents submitted research. Review Research Panel.',
       buttons: ['Approve Research ✅', 'Send Back 🔄', 'Cancel ❌'] });
     if (c1 === 'cancelled') return;
+    if (c1?.action === 'sendback') {
+      const reason = c1.reason || 'Please improve the research quality.';
+      const targetId = c1.targetAgent || null;
+      this._emitSystem(sessionId, `🔄 Sending back for revision: ${reason}`);
+      const agentsToRevise = targetId ? [targetId] : pipeline.agents;
+      const revisions = await Promise.all(
+        agentsToRevise.map(agentId => {
+          const agentName = profiles[agentId]?.name || agentId;
+          return this._runAgentCapture(pipeline, agentId,
+            injectSkill(agentName, 'research',
+              `REVISION REQUEST FROM BOSS: ${reason}\n\nYour previous research:\n${pipeline.researchData[agentId] || 'None submitted'}\n\nPlease improve and resubmit with better sources and higher confidence scores.`,
+              sessionCtx.getSession(sessionId), profiles[agentId]),
+            { silent: true }
+          );
+        })
+      );
+      revisions.forEach(r => {
+        if (r) pipeline.researchData[r.agentId] = r.content;
+      });
+      pipeline.researchValidation = this._validateResearchBatch(
+        Object.entries(pipeline.researchData).map(([agentId, content]) => ({ agentId, agentName: profiles[agentId]?.name || agentId, content })),
+        pipeline.researchPolicy,
+        profiles
+      );
+      sessionCtx.updateSession(sessionId, { researchValidation: pipeline.researchValidation });
+      this.emit('research-ready', { sessionId, researchData: pipeline.researchData, researchValidation: pipeline.researchValidation });
+    }
 
-    this._emitRoundHeader(sessionId, '📋 Combining Research...');
+    const readyResults = this._readyResearchResults(results, pipeline.researchValidation);
+    if (await this._stopIfNoReadyResearch(pipeline, readyResults)) return;
+    this._setPhase(pipeline, 'phase-3-synthesis', '📋 Phase 3 — Senior Synthesis');
     const combined = await this._runAgentCapture(pipeline, seniorAgent,
-      injectSkill(getAllProfiles()[seniorAgent]?.name || seniorAgent, 'research',
-        `Combine all research. Mark: ✅ Confirmed (2+ agents), ⚠️ Unverified (1 agent).\n${this._flagConfidence(results)}`,
-        sessionCtx.getSession(sessionId)),
+      injectSkill(profiles[seniorAgent]?.name || seniorAgent, 'research',
+        this._phasePrompt(pipeline, 'Phase 3 — Synthesis',
+          `Combine ONLY validation-ready research into one synthesis document. Do not use failed or NO_WEB_ACCESS content as factual evidence.\nRules:\n- Attribute findings to agents.\n- Every current factual claim must cite a URL.\n- Mark ✅ Confirmed when 2+ agents agree.\n- Mark ⚠️ Unverified when only 1 agent found it.\n- Highlight conflicts instead of hiding them.\n- Extract decision points for brainstorm.\n\nValidation-ready research submissions:\n${this._flagConfidence(readyResults)}`),
+        sessionCtx.getSession(sessionId), profiles[seniorAgent]),
       { silent: true }
     );
     pipeline.combinedDoc = combined.content;
     this.emit('combined-doc-ready', { sessionId, combinedDoc: pipeline.combinedDoc });
 
-    this._emitRoundHeader(sessionId, '💭 Round 2 — Team Discussion');
+    this._setPhase(pipeline, 'phase-4-brainstorm', '💭 Phase 4 — Structured Brainstorm');
     const discussResults = await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
       injectSkill(agentName, 'research',
-        `Read the combined research and add your perspective. Under 150 words.\nCOMBINED:\n${pipeline.combinedDoc}`,
-        sessionCtx.getSession(sessionId))
+        this._phasePrompt(pipeline, 'Phase 4 — Brainstorm Round 1',
+          `Use this exact format:\nPosition: Agree / Disagree / Partially Agree\nEvidence: specific source or reasoning\nConfidence: X/10\n\nCombined research:\n${pipeline.combinedDoc}`),
+        sessionCtx.getSession(sessionId), profiles[agentId])
     );
 
-    this._emitRoundHeader(sessionId, '📝 Writing Final Answer...');
+    this._setPhase(pipeline, 'phase-6-final', '📝 Phase 6 — Final Answer');
     const final = await this._runAgentCapture(pipeline, seniorAgent,
-      injectSkill(getAllProfiles()[seniorAgent]?.name || seniorAgent, 'research',
-        `Write the final research answer. Under 500 words.\nCOMBINED: ${pipeline.combinedDoc}\nDISCUSSION: ${discussResults.map(r => r.agentName + ': ' + r.content).join('\n')}`,
-        sessionCtx.getSession(sessionId))
+      injectSkill(profiles[seniorAgent]?.name || seniorAgent, 'research',
+        this._phasePrompt(pipeline, 'Phase 6 — Final Document',
+          `Write final research document.\nInclude:\n- Answer to Boss task\n- Decisions / recommendations\n- Evidence with source attribution\n- Open risks and low-confidence items\n- Confidence: X/10 overall\n\nCombined research:\n${pipeline.combinedDoc}\n\nBrainstorm responses:\n${discussResults.map(r => r.agentName + ': ' + r.content).join('\n')}`),
+        sessionCtx.getSession(sessionId), profiles[seniorAgent])
     );
     pipeline.finalAnswer = final.content;
 
@@ -200,11 +419,16 @@ class PipelineManager extends EventEmitter {
     const { sessionId, task, seniorAgent } = pipeline;
     this._emitRoundHeader(sessionId, '🔬 Round 1 — Deep Independent Research');
     const results = await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
-      injectSkill(agentName, 'deep', task, sessionCtx.getSession(sessionId)),
+      injectSkill(agentName, 'deep', task, sessionCtx.getSession(sessionId), this._getProviderProfile(pipeline, agentId)),
       { silent: true }
     );
     results.forEach(r => { pipeline.researchData[r.agentId] = r.content; });
-    this.emit('research-ready', { sessionId, researchData: pipeline.researchData });
+    const profiles = this._getProviderProfiles(pipeline);
+    pipeline.researchValidation = this._validateResearchBatch(results, pipeline.researchPolicy, profiles);
+    sessionCtx.updateSession(sessionId, { researchValidation: pipeline.researchValidation });
+    this.emit('research-ready', { sessionId, researchData: pipeline.researchData, researchValidation: pipeline.researchValidation });
+    const readyResults = this._readyResearchResults(results, pipeline.researchValidation);
+    if (await this._stopIfNoReadyResearch(pipeline, readyResults)) return;
 
     const c1 = await this._checkpoint(pipeline, { type: 'research-complete', message: '🔬 Deep Research Complete',
       description: 'All agents submitted. Review Research Panel.',
@@ -213,9 +437,9 @@ class PipelineManager extends EventEmitter {
 
     this._emitRoundHeader(sessionId, '📋 Senior Agent Combining...');
     const combined = await this._runAgentCapture(pipeline, seniorAgent,
-      injectSkill(getAllProfiles()[seniorAgent]?.name || seniorAgent, 'deep',
-        `Combine all research. ✅ Confirmed (2+ agents), ⚠️ Unverified (1 agent). Confidence 1-10 per finding.\n${this._flagConfidence(results)}`,
-        sessionCtx.getSession(sessionId)),
+      injectSkill(profiles[seniorAgent]?.name || seniorAgent, 'deep',
+        `Combine ONLY validation-ready research into one synthesis document. Do not use failed or NO_WEB_ACCESS content as factual evidence. Every current factual claim must cite a source URL. Mark ✅ Confirmed when 2+ ready agents agree and ⚠️ Unverified when only 1 ready agent found it. Confidence 1-10 per finding.\n${this._flagConfidence(readyResults)}`,
+        sessionCtx.getSession(sessionId), profiles[seniorAgent]),
       { silent: true }
     );
     pipeline.combinedDoc = combined.content;
@@ -227,9 +451,9 @@ class PipelineManager extends EventEmitter {
     this._emitRoundHeader(sessionId, '📝 Writing Final Answer...');
     const brainstormSummary = pipeline.brainstormLog.map(r => `${r.agentName}: ${r.content}`).join('\n\n');
     const final = await this._runAgentCapture(pipeline, seniorAgent,
-      injectSkill(getAllProfiles()[seniorAgent]?.name || seniorAgent, 'deep',
+      injectSkill(profiles[seniorAgent]?.name || seniorAgent, 'deep',
         `Write comprehensive final answer.\nTask: ${task}\nCOMBINED: ${pipeline.combinedDoc}\nBRAINSTORM: ${brainstormSummary}`,
-        sessionCtx.getSession(sessionId))
+        sessionCtx.getSession(sessionId), profiles[seniorAgent])
     );
     pipeline.finalAnswer = final.content;
 
@@ -240,37 +464,39 @@ class PipelineManager extends EventEmitter {
 
   // ── FULL BRAINSTORM (3 rounds) ──
   async _runFullBrainstorm(pipeline) {
-    const { sessionId } = pipeline;
-
-    this._emitRoundHeader(sessionId, '🧠 Brainstorm — Turn 1: Positions');
-    const turn1 = await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
-      injectSkill(agentName, 'deep',
-        `State your position based on the combined research. Max 200 words.\nRESEARCH: ${pipeline.combinedDoc}`,
-        sessionCtx.getSession(sessionId))
+    const { sessionId, task } = pipeline;
+    const profiles = getAllProfiles();
+    // Initialize the collaboration manager with this session
+    collaborationManager.initBrainstorm(
+      sessionId,
+      pipeline.agents,
+      pipeline.seniorAgent
     );
-    pipeline.brainstormLog.push(...turn1);
-
-    const hasDisagreement = turn1.map(r => r.content).join(' ').toLowerCase().match(/disagree|however|but |actually/);
-    if (!hasDisagreement) { this._emitSystem(sessionId, '✅ Early consensus reached.'); return; }
-
-    this._emitRoundHeader(sessionId, '🧠 Brainstorm — Turn 2: Challenges');
-    const turn1Summary = turn1.map(r => `${r.agentName}: ${r.content}`).join('\n\n');
-    const turn2 = await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
-      injectSkill(agentName, 'deep',
-        `Challenge the weakest point from each teammate. Max 200 words.\nPOSITIONS:\n${turn1Summary}`,
-        sessionCtx.getSession(sessionId))
-    );
-    pipeline.brainstormLog.push(...turn2);
-
-    this._emitRoundHeader(sessionId, '🧠 Brainstorm — Turn 3: Evidence Vote');
-    const allSoFar = [...turn1, ...turn2].map(r => `${r.agentName}: ${r.content}`).join('\n\n');
-    const turn3 = await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
-      injectSkill(agentName, 'deep',
-        `Cast your evidence vote. VOTE: [your answer]. One sentence why.\nDEBATE:\n${allSoFar}`,
-        sessionCtx.getSession(sessionId))
-    );
-    pipeline.brainstormLog.push(...turn3);
-    this.emit('brainstorm-votes', { sessionId, votes: turn3.map(r => r.content) });
+    // Forward collaboration events to pipeline listeners
+    const forwardEvents = ['round-start', 'early-consensus', 'votes-ready', 'deadlock'];
+    const handlers = {};
+    forwardEvents.forEach(evt => {
+      handlers[evt] = (data) => this.emit(evt, data);
+      collaborationManager.on(evt, handlers[evt]);
+    });
+    try {
+      const results = await collaborationManager.runFullBrainstorm({
+        sessionId,
+        combinedDoc: pipeline.combinedDoc || '',
+        task,
+      });
+      pipeline.brainstormLog.push(...results);
+      const voteAnalysis = collaborationManager.sessions[sessionId];
+      if (voteAnalysis?.consensusReached) {
+        this._emitSystem(sessionId, '✅ Team reached consensus.');
+      }
+      return results;
+    } finally {
+      // Clean up event listeners
+      forwardEvents.forEach(evt => {
+        collaborationManager.removeListener(evt, handlers[evt]);
+      });
+    }
   }
 
   // ── CODING ──
@@ -279,24 +505,28 @@ class PipelineManager extends EventEmitter {
     const profiles = getAllProfiles();
     const seniorName = profiles[seniorAgent]?.name || seniorAgent;
 
-    this._emitRoundHeader(sessionId, '📐 Coding Plan');
+    this._setPhase(pipeline, 'phase-1-coding-preflight', '📐 Phase 1 — Coding Pre-flight');
     const planResult = await this._runAgentCapture(pipeline, seniorAgent,
       injectSkill(seniorName, 'code',
-        `Present a coding plan for: ${task}\nInclude approach, files, tools. Under 300 words.`,
+        this._phasePrompt(pipeline, 'Coding Pre-flight',
+          `Inspect the workspace before planning.\nReturn a concrete coding plan with:\n- Problem understanding\n- Files likely touched\n- Verification command(s)\n- Risks / assumptions\n- Confidence: X/10\n\nCoding task:\n${task}`),
         sessionCtx.getSession(sessionId))
     );
     const c1 = await this._checkpoint(pipeline, { type: 'plan-approval', message: '📐 Coding Plan Ready',
       description: `${seniorName} presented a plan.`, buttons: ['Approve Plan ✅', 'Revise Plan 🔄', 'Cancel ❌'] });
     if (c1 === 'cancelled') return;
 
-    this._emitRoundHeader(sessionId, `💻 ${seniorName} is coding...`);
+    this._recordDecision(pipeline, `Coding plan approved for ${seniorName}`);
+    this._setPhase(pipeline, 'phase-2-coding-execution', `💻 Phase 2 — ${seniorName} Coding`);
     await this._runAgentCapture(pipeline, seniorAgent,
-      injectSkill(seniorName, 'code', `Write the code. Plan: ${planResult.content}\nTask: ${task}`, sessionCtx.getSession(sessionId))
+      injectSkill(seniorName, 'code', this._phasePrompt(pipeline, 'Coding Execution',
+        `Implement the approved plan directly in files.\nRules:\n- Keep changes surgical.\n- Do not touch unrelated files.\n- Run verification before reporting complete.\n\nApproved plan:\n${planResult.content}\n\nTask:\n${task}`), sessionCtx.getSession(sessionId))
     );
 
-    this._emitRoundHeader(sessionId, '📋 Code Summary');
+    this._setPhase(pipeline, 'phase-3-coding-summary', '📋 Phase 3 — Coding Summary');
     const summary = await this._runAgentCapture(pipeline, seniorAgent,
-      injectSkill(seniorName, 'code', `Write a code summary. Files, purpose, how to run. End with [CODE DONE]`, sessionCtx.getSession(sessionId))
+      injectSkill(seniorName, 'code', this._phasePrompt(pipeline, 'Coding Summary',
+        `Return this exact format:\n## What Was Built\n[brief description]\n\n## Decisions Followed\n- [approved plan / decisions]\n\n## Deviations\n- [any deviations + why, or None]\n\n## Issues Encountered\n- [blockers/problems, or None]\n\n## Verification\n- [commands run and result]\n\n## Confidence\nX/10 — [reason]\n\nEnd with [CODE DONE]`), sessionCtx.getSession(sessionId))
     );
     pipeline.finalAnswer = summary.content;
 
@@ -309,8 +539,8 @@ class PipelineManager extends EventEmitter {
   async _runCodeReview(pipeline) {
     const { sessionId, task } = pipeline;
     this._emitRoundHeader(sessionId, '👁️ Code Review');
-    const results = await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
-      injectSkill(agentName, 'review', task, sessionCtx.getSession(sessionId))
+    const results = await this._runAllAgentsCapture(pipeline, (agentId, agentName, profile) =>
+      injectSkill(agentName, 'review', task, sessionCtx.getSession(sessionId), profile)
     );
     pipeline.finalAnswer = results.map(r => `${r.agentName}:\n${r.content}`).join('\n\n');
     const c = await this._checkpoint(pipeline, { type: 'review-complete', message: '👁️ Code Review Complete',
@@ -322,19 +552,20 @@ class PipelineManager extends EventEmitter {
   async _runDebugging(pipeline) {
     const { sessionId, task, seniorAgent } = pipeline;
     this._emitRoundHeader(sessionId, '🐛 All Agents Diagnosing');
-    const results = await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
-      injectSkill(agentName, 'debug', task, sessionCtx.getSession(sessionId))
+    const results = await this._runAllAgentsCapture(pipeline, (agentId, agentName, profile) =>
+      injectSkill(agentName, 'debug', task, sessionCtx.getSession(sessionId), profile)
     );
     const c1 = await this._checkpoint(pipeline, { type: 'diagnosis-complete', message: '🐛 Diagnosis Ready',
       buttons: ['Approve Diagnosis ✅', 'Send Back 🔄', 'Cancel ❌'] });
     if (c1 === 'cancelled') return;
 
-    const seniorName = getAllProfiles()[seniorAgent]?.name || seniorAgent;
+    const seniorProfile = this._getProviderProfile(pipeline, seniorAgent);
+    const seniorName = seniorProfile?.name || seniorAgent;
     this._emitRoundHeader(sessionId, `🔧 ${seniorName} Applying Fix...`);
     const fix = await this._runAgentCapture(pipeline, seniorAgent,
       injectSkill(seniorName, 'debug',
         `Apply best fix.\nTask: ${task}\nDIAGNOSES:\n${results.map(r => `${r.agentName}: ${r.content}`).join('\n\n')}`,
-        sessionCtx.getSession(sessionId))
+        sessionCtx.getSession(sessionId), seniorProfile)
     );
     pipeline.finalAnswer = fix.content;
     const c2 = await this._checkpoint(pipeline, { type: 'fix-complete', message: '🔧 Fix Applied',
@@ -346,20 +577,21 @@ class PipelineManager extends EventEmitter {
   async _runPlanning(pipeline) {
     const { sessionId, task, seniorAgent } = pipeline;
     this._emitRoundHeader(sessionId, '📐 Round 1 — Independent Planning');
-    const results = await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
-      injectSkill(agentName, 'plan', task, sessionCtx.getSession(sessionId))
+    const results = await this._runAllAgentsCapture(pipeline, (agentId, agentName, profile) =>
+      injectSkill(agentName, 'plan', task, sessionCtx.getSession(sessionId), profile)
     );
     const c1 = await this._checkpoint(pipeline, { type: 'plans-ready', message: '📐 All Plans Submitted',
       buttons: ['Start Brainstorm 🧠', 'Skip to Final ⏭️', 'Cancel ❌'] });
     if (c1 === 'cancelled') return;
     if (c1 !== 'skip') await this._runFullBrainstorm(pipeline);
 
-    const seniorName = getAllProfiles()[seniorAgent]?.name || seniorAgent;
+    const seniorProfile = this._getProviderProfile(pipeline, seniorAgent);
+    const seniorName = seniorProfile?.name || seniorAgent;
     this._emitRoundHeader(sessionId, '📐 Writing Final Plan...');
     const final = await this._runAgentCapture(pipeline, seniorAgent,
       injectSkill(seniorName, 'plan',
         `Write final plan. Be specific.\nPLANS: ${results.map(r => `${r.agentName}: ${r.content}`).join('\n')}\nDISCUSSION: ${pipeline.brainstormLog.map(r => `${r.agentName}: ${r.content}`).join('\n')}`,
-        sessionCtx.getSession(sessionId))
+        sessionCtx.getSession(sessionId), seniorProfile)
     );
     pipeline.finalAnswer = final.content;
     const c2 = await this._checkpoint(pipeline, { type: 'final-answer', message: '📐 Final Plan Ready',
@@ -371,8 +603,9 @@ class PipelineManager extends EventEmitter {
   async _runTesting(pipeline) {
     const { sessionId, task, seniorAgent } = pipeline;
     this._emitRoundHeader(sessionId, '🧪 Writing Tests...');
+    const seniorProfile = this._getProviderProfile(pipeline, seniorAgent);
     const result = await this._runAgentCapture(pipeline, seniorAgent,
-      injectSkill(getAllProfiles()[seniorAgent]?.name || seniorAgent, 'test', task, sessionCtx.getSession(sessionId))
+      injectSkill(seniorProfile?.name || seniorAgent, 'test', task, sessionCtx.getSession(sessionId), seniorProfile)
     );
     pipeline.finalAnswer = result.content;
     const c = await this._checkpoint(pipeline, { type: 'tests-complete', message: '🧪 Tests Written',
@@ -383,13 +616,13 @@ class PipelineManager extends EventEmitter {
   // ── APP TESTING ──
   async _runAppTesting(pipeline) {
     const { sessionId, task } = pipeline;
-    const profiles = getAllProfiles();
+    const profiles = this._getProviderProfiles(pipeline);
     const browserAgents = pipeline.agents.filter(id => profiles[id]?.hasBrowser);
     if (browserAgents.length === 0) { this._emitSystem(sessionId, '⚠️ No browser-capable agents.'); return; }
     this._emitRoundHeader(sessionId, '📱 App Testing');
     const results = await Promise.all(browserAgents.map(agentId =>
       this._runAgentCapture(pipeline, agentId,
-        injectSkill(profiles[agentId].name, 'apptest', task, sessionCtx.getSession(sessionId)))
+        injectSkill(profiles[agentId].name, 'apptest', task, sessionCtx.getSession(sessionId), profiles[agentId]))
     ));
     pipeline.finalAnswer = results.map(r => `${r.agentName}:\n${r.content}`).join('\n\n');
     const c = await this._checkpoint(pipeline, { type: 'apptest-complete', message: '📱 App Testing Complete',
@@ -400,8 +633,9 @@ class PipelineManager extends EventEmitter {
   // ── DOCUMENT ──
   async _runDocument(pipeline) {
     const { sessionId, task, seniorAgent } = pipeline;
+    const seniorProfile = this._getProviderProfile(pipeline, seniorAgent);
     const result = await this._runAgentCapture(pipeline, seniorAgent,
-      injectSkill(getAllProfiles()[seniorAgent]?.name || seniorAgent, 'doc', task, sessionCtx.getSession(sessionId))
+      injectSkill(seniorProfile?.name || seniorAgent, 'doc', task, sessionCtx.getSession(sessionId), seniorProfile)
     );
     pipeline.finalAnswer = result.content;
     const c = await this._checkpoint(pipeline, { type: 'doc-complete', message: '📄 Document Complete',
@@ -412,8 +646,9 @@ class PipelineManager extends EventEmitter {
   // ── TEAM CODING ──
   async _runTeamCoding(pipeline) {
     const { sessionId, task, seniorAgent } = pipeline;
-    const profiles   = getAllProfiles();
-    const seniorName = profiles[seniorAgent]?.name || seniorAgent;
+    const profiles   = this._getProviderProfiles(pipeline);
+    const seniorProfile = profiles[seniorAgent];
+    const seniorName = seniorProfile?.name || seniorAgent;
 
     // ── Phase 1: Architecture Planning ───────────────────────────────────────
     this._emitRoundHeader(sessionId, '👥 Team Coding — Phase 1: Architecture Planning');
@@ -422,7 +657,7 @@ class PipelineManager extends EventEmitter {
     );
 
     const planResults = await this._runAllAgentsCapture(pipeline,
-      (agentId, agentName) => injectSkill(agentName, 'teamcode',
+      (agentId, agentName, profile) => injectSkill(agentName, 'teamcode',
         `PLANNING PHASE — Do NOT write any code yet.
 
 Discuss the architecture for this task: ${task}
@@ -437,7 +672,7 @@ Your job in this planning phase:
 4. Define what interfaces/APIs your part will expose to the others
 
 Keep your response focused and specific. Max 250 words.`,
-        sessionCtx.getSession(sessionId)
+        sessionCtx.getSession(sessionId), profile
       )
     );
 
@@ -468,7 +703,7 @@ INTERFACE CONTRACTS:
 
 PLANNING DISCUSSION:
 ${planSummary}`,
-        sessionCtx.getSession(sessionId)
+        sessionCtx.getSession(sessionId), seniorProfile
       )
     );
 
@@ -480,10 +715,27 @@ ${planSummary}`,
       buttons:     ['Approve — Start Coding ✅', 'Revise Division 🔄', 'Cancel ❌'],
     });
     if (c1 === 'cancelled') return;
-    if (c1 === 'sendback' || c1 === 'Revise Division 🔄') {
-      this._emitSystem(sessionId, '🔄 Revising work division...');
-      await this._runTeamCoding(pipeline); // restart planning
-      return;
+    if (c1 === 'sendback' || (c1?.action === 'sendback') || c1 === 'Revise Division 🔄') {
+      const reason = c1?.reason || 'Please revise the work division.';
+      pipeline.sendBackCount = (pipeline.sendBackCount || 0) + 1;
+      if (pipeline.sendBackCount >= 3) {
+        this._emitSystem(sessionId, '⚠️ Maximum revisions reached. Please approve or cancel.');
+        return;
+      }
+      this._emitSystem(sessionId, `🔄 Boss requested revision: ${reason}`);
+      const replanResult = await this._runAgentCapture(pipeline, seniorAgent,
+        injectSkill(seniorName, 'teamcode',
+          `REVISION REQUEST from Boss:\n${reason}\n\nYour previous division:\n${divisionResult.content}\n\nRevise and resubmit the work division only.`,
+          sessionCtx.getSession(sessionId), seniorProfile)
+      );
+      divisionResult.content = replanResult.content;
+      const c1Retry = await this._checkpoint(pipeline, {
+        type: 'team-division-ready',
+        message: '👥 Revised Work Division Ready',
+        description: 'Boss requested a revision. Review the updated plan.',
+        buttons: ['Approve — Start Coding ✅', 'Revise Division 🔄', 'Cancel ❌'],
+      });
+      if (c1Retry === 'cancelled') return;
     }
 
     // ── Phase 2: Parallel Coding ──────────────────────────────────────────────
@@ -495,7 +747,7 @@ ${planSummary}`,
     const division = divisionResult.content;
 
     const codeResults = await this._runAllAgentsCapture(pipeline,
-      (agentId, agentName) => injectSkill(agentName, 'teamcode',
+      (agentId, agentName, profile) => injectSkill(agentName, 'teamcode',
         `CODING PHASE — Now write your assigned code.
 
 Read your assignment from the work division below.
@@ -518,7 +770,7 @@ ${division}
 
 TASK:
 ${task}`,
-        sessionCtx.getSession(sessionId)
+        sessionCtx.getSession(sessionId), profile
       )
     );
 
@@ -552,7 +804,7 @@ ${codeSummaries}
 
 ORIGINAL WORK DIVISION (interface contracts):
 ${division}`,
-        sessionCtx.getSession(sessionId)
+        sessionCtx.getSession(sessionId), seniorProfile
       )
     );
 
@@ -568,9 +820,14 @@ ${division}`,
 
     if (c2 === 'review' || c2 === 'Review Code 👁️') {
       // Run code review phase
-      await this._runCodeReviewPhase(pipeline, '', pipeline.finalAnswer);
+      await this._runCodeReview(pipeline);
     } else if (c2 === 'approved' || c2 === 'Approve ✅') {
       this.emit('pipeline-complete', { sessionId, finalAnswer: pipeline.finalAnswer });
+    } else if (c2?.action === 'sendback' || c2 === 'Send Back 🔄') {
+      const reason = c2?.reason || 'Please improve the final integration and fix any issues.';
+      this._emitSystem(sessionId, `🔄 Boss requested revision of integrated code: ${reason}`);
+      // Restart integration phase with feedback
+      await this._runTeamCoding(pipeline);
     }
   }
 
@@ -584,7 +841,7 @@ ${division}`,
   async _runGeneral(pipeline) {
     const { sessionId, task } = pipeline;
     await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
-      injectSkill(agentName, 'general', task, sessionCtx.getSession(sessionId))
+      `You are ${agentName}, a concise member of No. 1 Team. Answer the Boss directly.\n\nBoss message:\n${task}`
     );
     this.emit('pipeline-complete', { sessionId, finalAnswer: null });
   }

@@ -32,6 +32,7 @@ export default function GeneralTab({ sessionId }) {
   const [showSeniorPicker, setShowSeniorPicker] = useState(false)
   const [pendingTask, setPendingTask] = useState(null)
   const [researchData, setResearchData] = useState({})
+  const [researchValidation, setResearchValidation] = useState(null)
   const [combinedDoc, setCombinedDoc] = useState(null)
   const [showResearch, setShowResearch] = useState(false)
   const [hasResearch, setHasResearch] = useState(false)
@@ -57,6 +58,15 @@ export default function GeneralTab({ sessionId }) {
   // Provider profiles & models
   const [profiles, setProfiles] = useState(null)
   const [selectedModels, setSelectedModels] = useState({})
+  const [selectedSubagentModels, setSelectedSubagentModels] = useState({ codex: 'gpt-5.4-mini' })
+  const [selectedProxyModels, setSelectedProxyModels] = useState({
+    claude: { opus: '', sonnet: '', haiku: '' },
+    codex: { main: '' },
+  })
+  const [executionModes, setExecutionModes] = useState({})
+
+  // Pending task type — when Boss types a bare slash command with no topic
+  const [pendingTaskType, setPendingTaskType] = useState(null)
 
   const [currentSessionId, setCurrentSessionId] = useState(sessionId)
 
@@ -68,8 +78,13 @@ export default function GeneralTab({ sessionId }) {
         const p = await window.teamAPI.getProviderProfiles()
         setProfiles(p)
         const defaults = {}
-        Object.values(p).forEach(profile => { defaults[profile.id] = profile.defaultModel })
+        const executionDefaults = {}
+        Object.values(p).forEach(profile => {
+          defaults[profile.id] = profile.defaultModel
+          executionDefaults[profile.id] = profile.defaultExecutionMode || 'native'
+        })
         setSelectedModels(defaults)
+        setExecutionModes(executionDefaults)
       } catch (e) { console.error('Failed to load profiles:', e) }
     }
     loadProfiles()
@@ -82,7 +97,12 @@ export default function GeneralTab({ sessionId }) {
     async function load() {
       if (!window.teamAPI?.session?.loadState) return
       const res = await window.teamAPI.session.loadState(sessionId.replace('session-', ''))
-      if (res?.success && res.state?.messages) setMessages(res.state.messages)
+      if (res?.success && res.state?.messages) {
+        setMessages(res.state.messages)
+        if (res.state.seniorAgent) setSeniorAgent(res.state.seniorAgent)
+        if (res.state.currentMode) setCurrentMode(res.state.currentMode)
+        if (res.state.workspaceDir) setWorkspaceDir(res.state.workspaceDir)
+      }
       else setMessages([])
     }
     load()
@@ -94,7 +114,7 @@ export default function GeneralTab({ sessionId }) {
     const num = currentSessionId.replace('session-', '')
     window.teamAPI?.session?.saveState(num, {
       title: messages.find(m => m.agent === 'You')?.content?.slice(0, 80) || 'New Session',
-      messages, lastUpdated: new Date().toISOString()
+      messages, seniorAgent, currentMode, workspaceDir, lastUpdated: new Date().toISOString()
     })
   }, [messages, currentSessionId])
 
@@ -175,6 +195,7 @@ export default function GeneralTab({ sessionId }) {
     removers.push(window.teamAPI.onPipelineEvent('research-ready', (data) => {
       if (data.sessionId !== currentSessionId) return
       setResearchData(data.researchData)
+      setResearchValidation(data.researchValidation || null)
       setHasResearch(true)
       addMsg({ type: 'research-notification', agentCount: Object.keys(data.researchData).length, agent: 'System', isSystem: true })
     }))
@@ -182,6 +203,9 @@ export default function GeneralTab({ sessionId }) {
     removers.push(window.teamAPI.onPipelineEvent('combined-doc-ready', (data) => {
       if (data.sessionId !== currentSessionId) return
       setCombinedDoc(data.combinedDoc)
+      if (data.combinedDoc?.trim()) {
+        addMsg({ agent: profiles?.[seniorAgent]?.name || 'Senior Agent', agentId: seniorAgent, content: data.combinedDoc })
+      }
     }))
 
     removers.push(window.teamAPI.onPipelineEvent('pipeline-cancelled', (data) => {
@@ -234,6 +258,9 @@ export default function GeneralTab({ sessionId }) {
       if (data.sessionId !== currentSessionId) return
       setPipelineComplete(true)
       setIsRunning(false)
+      if (data.finalAnswer?.trim()) {
+        addMsg({ agent: profiles?.[seniorAgent]?.name || 'Senior Agent', agentId: seniorAgent, content: data.finalAnswer })
+      }
       addMsg({ type: 'system', content: '✅ Pipeline complete. Session saved.', agent: 'System', isSystem: true })
       setLastSessionData({
         sessionName: originalTask?.slice(0, 40) || 'Session',
@@ -265,30 +292,73 @@ export default function GeneralTab({ sessionId }) {
     setTaskType(null)
     setSlashMenuOpen(false)
 
-    // Detect task type locally from slash command
-    const slashMatch = text.match(/^\/(\w+)/)
-    const detectedType = slashMatch ? slashMatch[1] : 'general'
-    const cleanTask = text.replace(/^\/\w+\s*/, '').trim() || text
+    // If we have a pending task type from a previous bare slash command, use it
+    if (pendingTaskType) {
+      const finalType = pendingTaskType
+      setPendingTaskType(null)
+      setOriginalTask(text)
+      setCurrentTaskType(finalType)
+
+      if (!seniorAgent) {
+        setShowSeniorPicker(true)
+        setPendingTask({ message: text, taskType: finalType, agents })
+        return
+      }
+      startPipeline(text, finalType, agents)
+      return
+    }
+
+    let detectedType = 'general'
+    let cleanTask = text
+    let fromSlash = false
+    try {
+      const detected = await window.teamAPI?.detectTaskType?.(text)
+      detectedType = detected?.taskType?.id || 'general'
+      fromSlash = detected?.fromSlash || false
+      cleanTask = fromSlash ? text.replace(/^\/\w+\s*/, '').trim() : text
+    } catch (e) {
+      const slashMatch = text.match(/^\/(\w+)/)
+      if (slashMatch) {
+        detectedType = slashMatch[1]
+        fromSlash = true
+      }
+      cleanTask = text.replace(/^\/\w+\s*/, '').trim()
+    }
+
+    // CHECK: If slash command used but no topic provided
+    if (fromSlash && cleanTask.length === 0 && detectedType !== 'brainstorm') {
+      const icons = { quick: '⚡', research: '🔍', deep: '🔬', code: '💻', debug: '🐛', review: '👁️', plan: '📐', test: '🧪', apptest: '📱', doc: '📄', teamcode: '👥' }
+      const labels = { quick: 'Quick Research', research: 'Mid Research', deep: 'Deep Research', code: 'Coding Task', debug: 'Debugging', review: 'Code Review', plan: 'Planning', test: 'Testing', apptest: 'App Testing', doc: 'Document', teamcode: 'Team Coding' }
+      const actionWords = { code: 'build', debug: 'debug', review: 'review', test: 'test', plan: 'plan' }
+      const icon = icons[detectedType] || '💬'
+      const label = labels[detectedType] || detectedType
+      const action = actionWords[detectedType] || 'research'
+      addMsg({ type: 'system', content: `${icon} **${label}** selected.\n\nWhat would you like to ${action}?\n\nType your topic and press Send.`, agent: 'System', isSystem: true })
+      setPendingTaskType(detectedType)
+      return
+    }
+
+    const finalTask = cleanTask || text
 
     // If no senior agent selected yet, show picker
     if (!seniorAgent) {
       setShowSeniorPicker(true)
-      setPendingTask({ message: cleanTask, taskType: detectedType, agents })
+      setPendingTask({ message: finalTask, taskType: detectedType, agents })
       return
     }
 
     // Brainstorm chat mode — free conversation
     if (brainstormChatActive) {
       window.teamAPI?.sendBrainstormMessage?.({
-        sessionId: currentSessionId, message: cleanTask,
-        targetAgents: null, allAgents: agents, models: selectedModels,
+        sessionId: currentSessionId, message: finalTask,
+        targetAgents: null, allAgents: agents, models: selectedModels, executionModes,
       })
       return
     }
 
-    setOriginalTask(cleanTask)
+    setOriginalTask(finalTask)
     setCurrentTaskType(detectedType)
-    startPipeline(cleanTask, detectedType, agents)
+    startPipeline(finalTask, detectedType, agents)
   }
 
   function startPipeline(task, taskTypeId, agents) {
@@ -297,8 +367,10 @@ export default function GeneralTab({ sessionId }) {
     agents.forEach(a => { newStatus[a] = 'running' })
     setAgentStatus(newStatus)
 
+    const workDir = workspaceDir || null
     window.teamAPI?.createSessionContext?.({
-      sessionId: currentSessionId, activeAgents: agents, mode: currentMode,
+      sessionId: currentSessionId, task, taskType: taskTypeId, activeAgents: agents, mode: currentMode,
+      executionModes, seniorAgent, workDir,
     })
 
     window.teamAPI?.startPipeline?.({
@@ -307,7 +379,9 @@ export default function GeneralTab({ sessionId }) {
       task,
       agents,
       models: selectedModels,
-      workDir: null,
+      subagentModels: selectedSubagentModels,
+      executionModes,
+      workDir,
       mode: currentMode,
       seniorAgent,
     })
@@ -408,7 +482,7 @@ export default function GeneralTab({ sessionId }) {
     <div className="chat-container">
       {/* Research Panel overlay */}
       <ResearchPanel isOpen={showResearch} onClose={() => setShowResearch(false)}
-        researchData={researchData} combinedDoc={combinedDoc} />
+        researchData={researchData} researchValidation={researchValidation} combinedDoc={combinedDoc} />
 
       {/* Active Agents row */}
       <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -491,35 +565,71 @@ export default function GeneralTab({ sessionId }) {
 
           if (isSystem) {
             if (msg.type === 'model-selector') {
+              const selStyle = { background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: '4px', padding: '6px 8px', fontSize: '12px', cursor: 'pointer', outline: 'none', width: '100%' }
               return (
-                <div key={msg.id} style={{ margin: '12px auto', maxWidth: 400, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <div key={msg.id} style={{ margin: '12px auto', maxWidth: 460, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <span>🎯</span>
-                    <h3 style={{ margin: 0, fontSize: 14 }}>Change Model</h3>
+                    <h3 style={{ margin: 0, fontSize: 14 }}>Change Models</h3>
                   </div>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 11, marginBottom: 16, marginTop: 0 }}>Changes apply to the next task sent.</p>
+
                   {profiles && getAgentKeys().map(key => {
                     const profile = profiles[key]
                     if (!profile) return null
+                    const executionOptions = profile.executionModes || ['native']
+                    const currentExecutionMode = executionModes[key] || profile.defaultExecutionMode || 'native'
+                    const proxyActive = currentExecutionMode === 'proxy'
                     return (
-                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{profile.name}</span>
-                        <select
-                          value={selectedModels[key] || profile.defaultModel}
-                          onChange={e => setSelectedModels(prev => ({ ...prev, [key]: e.target.value }))}
-                          style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: '4px', padding: '4px 8px', fontSize: '12px', cursor: 'pointer', outline: 'none', minWidth: 160 }}
-                        >
+                      <div key={key} style={{ marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: profile.color }} />
+                          <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{profile.name}</span>
+                        </div>
+                        <label style={{ color: 'var(--text-secondary)', fontSize: 11, display: 'block', marginBottom: 4 }}>Execution:</label>
+                        <select value={currentExecutionMode} onChange={e => setExecutionModes(prev => ({ ...prev, [key]: e.target.value }))} disabled={executionOptions.length === 1} style={{ ...selStyle, marginBottom: 8, opacity: executionOptions.length === 1 ? 0.7 : 1 }}>
+                          {executionOptions.map(mode => <option key={mode} value={mode}>{mode === 'proxy' ? 'Proxy' : 'Native CLI'}</option>)}
+                        </select>
+                        <label style={{ color: 'var(--text-secondary)', fontSize: 11, display: 'block', marginBottom: 4 }}>{key === 'codex' ? 'Main Model:' : 'Model:'}</label>
+                        <select value={selectedModels[key] || profile.defaultModel} onChange={e => setSelectedModels(prev => ({ ...prev, [key]: e.target.value }))} style={{ ...selStyle, marginBottom: 6 }}>
                           {profile.models.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                         </select>
+                        {key === 'codex' && profile.subagentModels && (
+                          <>
+                            <label style={{ color: 'var(--text-secondary)', fontSize: 11, display: 'block', marginTop: 8, marginBottom: 4 }}>Subagent Model (lighter tasks):</label>
+                            <select value={selectedSubagentModels?.codex || profile.defaultSubagentModel} onChange={e => setSelectedSubagentModels(prev => ({ ...prev, codex: e.target.value }))} style={{ ...selStyle, marginBottom: 6 }}>
+                              {profile.subagentModels.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </select>
+                          </>
+                        )}
+                        {profile.proxyModels && proxyActive && (
+                          <div style={{ marginTop: 8, padding: '10px 12px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: 10, margin: '0 0 8px', opacity: 0.8 }}>Proxy mode routes this provider through configured 9Router env. Native CLI uses local CLI auth and config.</p>
+                            {profile.proxyModels.map(pm => (
+                              <div key={pm.slot} style={{ marginBottom: 8 }}>
+                                <label style={{ color: 'var(--text-secondary)', fontSize: 11, display: 'block', marginBottom: 3 }}>{pm.label}:</label>
+                                <input type="text" placeholder={pm.description} value={selectedProxyModels[key]?.[pm.slot] || ''} onChange={e => setSelectedProxyModels(prev => ({ ...prev, [key]: { ...(prev[key] || {}), [pm.slot]: e.target.value } }))} style={{ ...selStyle, fontFamily: 'var(--font-mono, monospace)', fontSize: 11 }} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {key === 'gemini' && <p style={{ color: 'var(--text-secondary)', fontSize: 10, marginTop: 4, marginBottom: 0, opacity: 0.7 }}>ℹ️ Uses your Google subscription directly. No proxy needed.</p>}
                       </div>
                     )
                   })}
-                  <button
-                    onClick={() => {
-                      addMsg({ type: 'system', content: '✅ Models updated successfully.', agent: 'System', isSystem: true })
-                      setMessages(prev => prev.filter(m => m.id !== msg.id))
-                    }}
-                    style={{ marginTop: 8, width: '100%', padding: '8px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: 6, cursor: 'pointer', fontSize: 12 }}
-                  >
+                  <button onClick={() => {
+                    const summary = getAgentKeys().map(k => {
+                      const p = profiles[k]; if (!p) return ''
+                      const model = selectedModels[k] || p.defaultModel
+                      const label = p.models.find(m => m.value === model)?.label || model
+                      let line = `${p.name}: ${label}`
+                      if (k === 'codex') line += ` | Sub: ${selectedSubagentModels?.codex || p.defaultSubagentModel}`
+                      line += ` | ${executionModes[k] === 'proxy' ? 'Proxy' : 'Native CLI'}`
+                      return line
+                    }).filter(Boolean).join('\n')
+                    addMsg({ type: 'system', content: `✅ Models updated:\n${summary}`, agent: 'System', isSystem: true })
+                    setMessages(prev => prev.filter(m => m.id !== msg.id))
+                  }} style={{ marginTop: 4, width: '100%', padding: '8px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: 6, cursor: 'pointer', fontSize: 12 }}>
                     Apply Changes
                   </button>
                 </div>
@@ -648,6 +758,16 @@ export default function GeneralTab({ sessionId }) {
 
       {/* Messaging Bar */}
       <div className="messaging-bar">
+        {showSeniorPicker && (
+          <div className="slash-menu" style={{ padding: '16px', bottom: '100%', marginBottom: '8px' }}>
+            <SeniorAgentSelector 
+              activeAgents={getAgentKeys()} 
+              profiles={profiles} 
+              onSelect={handleSeniorSelect} 
+            />
+          </div>
+        )}
+
         {slashMenuOpen && (
           <div className="slash-menu">
             {filteredSlash.map((item, i) => {

@@ -55,45 +55,54 @@ async function runTests() {
     const title = await page.title()
     console.log(`  Page title: "${title}"`)
 
+    // Complete first-run onboarding if this is a fresh browser profile.
+    const onboarding = page.locator('.onboarding-screen')
+    if (await onboarding.isVisible().catch(() => false)) {
+      log('Onboarding visible — completing first-run setup')
+      await page.getByRole('button', { name: /Get Started/i }).click()
+      await page.getByRole('button', { name: /Test & Continue/i }).click()
+      await page.getByRole('button', { name: /Continue/i }).click()
+      await page.getByRole('button', { name: /Next/i }).click()
+      await page.getByRole('button', { name: /Start Using No\. 1 Team/i }).click()
+      await page.waitForTimeout(1000)
+    }
+
     // Check the home screen has the main app structure
-    const appDiv = page.locator('.app')
+    const appDiv = page.locator('.app-container')
     const appVisible = await appDiv.isVisible().catch(() => false)
-    if (appVisible) log('App loaded — .app container visible')
-    else fail('.app container not found')
+    if (appVisible) log('App loaded — .app-container visible')
+    else fail('.app-container not found')
 
     // ─────────────────────────────────────────
     // TEST 2: Sidebar elements visible
     // ─────────────────────────────────────────
     console.log('\nTEST 2: Sidebar elements visible')
 
-    // Sidebar brand
-    const brand = page.locator('.sb-brand')
-    if (await brand.isVisible().catch(() => false)) log('Sidebar brand visible')
-    else warn('Sidebar brand not found')
+    const sidebar = page.locator('.sidebar')
+    if (await sidebar.isVisible().catch(() => false)) log('Sidebar visible')
+    else warn('Sidebar not found')
 
-    // "New Session" button — class: new-btn, inside .sb-new
-    const newBtn = page.locator('.new-btn')
+    const newBtn = page.locator('.btn-new-session').first()
     const newBtnVisible = await newBtn.isVisible().catch(() => false)
     if (newBtnVisible) {
-      log('"New Session" button (.new-btn) visible')
+      log('"New Session" button (.btn-new-session) visible')
     } else {
-      fail('"New Session" button (.new-btn) not found')
+      fail('"New Session" button (.btn-new-session) not found')
       await screenshot('02-sidebar-issue')
     }
 
-    // Nav items: Sessions, Files, Settings
-    const navSessions = page.locator('.nav-item').filter({ hasText: /Sessions/i }).first()
-    const navFiles = page.locator('.nav-item').filter({ hasText: /Files/i }).first()
-    const navSettings = page.locator('.nav-item').filter({ hasText: /Settings/i }).first()
+    const navFiles = page.locator('.sidebar-link').filter({ hasText: /Brain Files/i }).first()
+    const navSettings = page.locator('.sidebar-link').filter({ hasText: /Settings/i }).first()
+    const navAnalytics = page.locator('.sidebar-link').filter({ hasText: /Analytics/i }).first()
 
-    if (await navSessions.isVisible().catch(() => false)) log('Nav: Sessions visible')
-    else warn('Nav: Sessions not found')
-
-    if (await navFiles.isVisible().catch(() => false)) log('Nav: Files visible')
-    else warn('Nav: Files not found')
+    if (await navFiles.isVisible().catch(() => false)) log('Nav: Brain Files visible')
+    else warn('Nav: Brain Files not found')
 
     if (await navSettings.isVisible().catch(() => false)) log('Nav: Settings visible')
     else warn('Nav: Settings not found')
+
+    if (await navAnalytics.isVisible().catch(() => false)) log('Nav: Analytics visible')
+    else warn('Nav: Analytics not found')
 
     await screenshot('02-sidebar-check')
 
@@ -102,303 +111,151 @@ async function runTests() {
     // ─────────────────────────────────────────
     console.log('\nTEST 3: Home view and Start Session')
 
-    // Click "New Session" in sidebar to go to home view
-    await newBtn.click()
-    await page.waitForTimeout(1000)
-
-    // Now in home view — check for .home class and "Start Session" button
-    const homeView = page.locator('.home')
-    const homeVisible = await homeView.isVisible().catch(() => false)
-    if (homeVisible) {
-      log('Home view (.home) visible')
-
-      const startBtn = page.locator('.home-start-btn')
-      const startBtnVisible = await startBtn.isVisible().catch(() => false)
-      if (startBtnVisible) {
-        log('"Start Session" button (.home-start-btn) visible')
-        await screenshot('03-home-view')
-
-        // Click to start a session
-        await startBtn.click()
-        await page.waitForTimeout(1500)
-        log('Clicked "Start Session" — session started')
-      } else {
-        warn('.home-start-btn not found')
-        await screenshot('03-home-no-start-btn')
-      }
+    const welcomeView = page.locator('.welcome-screen')
+    const welcomeVisible = await welcomeView.isVisible().catch(() => false)
+    if (welcomeVisible) {
+      log('Welcome view (.welcome-screen) visible')
     } else {
-      warn('.home view not visible — may already be in session')
+      warn('.welcome-screen not visible — may already be in session')
       await screenshot('03-home-not-visible')
+    }
+
+    if (newBtnVisible) {
+      await screenshot('03-home-view')
+      await newBtn.click()
+      await page.waitForTimeout(1500)
+      log('Clicked "New Session" — session started')
     }
 
     await screenshot('03-after-session-start')
 
     // ─────────────────────────────────────────
-    // TEST 4: Session view — tab bar visible
+    // TEST 4: Session view — General pipeline chat
     // ─────────────────────────────────────────
-    console.log('\nTEST 4: Session view — tab bar and General tab')
+    console.log('\nTEST 4: Session view — General pipeline chat')
 
-    const tabBarWrap = page.locator('.tab-bar-wrap')
-    const tabBarVisible = await tabBarWrap.isVisible().catch(() => false)
-    if (tabBarVisible) {
-      log('Tab bar (.tab-bar-wrap) visible')
-    } else {
-      warn('.tab-bar-wrap not found')
-    }
+    const sessionHeader = page.locator('.session-header, .chat-header, [class*="session"]').filter({ hasText: /Session 1/i }).first()
+    if (await sessionHeader.isVisible().catch(() => false)) log('Session 1 view visible')
+    else warn('Session header not found')
 
-    const generalTab = page.locator('.tab').filter({ hasText: /General/i }).first()
-    const generalExists = await generalTab.isVisible().catch(() => false)
-    if (generalExists) {
-      log('General tab (.tab) visible')
-      await generalTab.click()
-      await page.waitForTimeout(500)
-      log('Clicked General tab')
-    } else {
-      warn('General tab not found')
-    }
-    await screenshot('04-general-tab')
-
-    // ─────────────────────────────────────────
-    // TEST 5: Pipeline bar visible (phase controls)
-    // ─────────────────────────────────────────
-    console.log('\nTEST 5: Pipeline status bar')
-    const pipelineBar = page.locator('.pipeline-bar')
-    const pipelineVisible = await pipelineBar.isVisible().catch(() => false)
-    if (pipelineVisible) {
-      log('Pipeline bar (.pipeline-bar) visible')
-
-      const phaseLabel = page.locator('.phase-label')
-      const phaseTxt = await phaseLabel.innerText().catch(() => '')
-      console.log(`  Current phase: "${phaseTxt.trim()}"`)
-
-      const phaseNavBtns = page.locator('.phase-nav-btn')
-      const btnCount = await phaseNavBtns.count()
-      console.log(`  Phase nav buttons found: ${btnCount}`)
-      if (btnCount > 0) log('Phase navigation buttons visible')
-    } else {
-      warn('.pipeline-bar not found')
-    }
-    await screenshot('05-pipeline-bar')
-
-    // ─────────────────────────────────────────
-    // TEST 6: Add an agent tab — use the "+" tab
-    // ─────────────────────────────────────────
-    console.log('\nTEST 6: Add Claude Code agent tab via "+" button')
-
-    const addTabBtn = page.locator('.tab-add')
-    const addTabExists = await addTabBtn.isVisible().catch(() => false)
-    if (addTabExists) {
-      await addTabBtn.click()
-      await page.waitForTimeout(800)
-      await screenshot('06-add-tab-dropdown')
-      log('Clicked "+" tab-add button')
-
-      const addDrop = page.locator('.add-tab-drop')
-      const dropVisible = await addDrop.isVisible().catch(() => false)
-      if (dropVisible) {
-        log('Add tab dropdown (.add-tab-drop) opened')
-
-        const items = page.locator('.add-tab-item')
-        const itemCount = await items.count()
-        console.log(`  Available agents in dropdown: ${itemCount}`)
-
-        const claudeItem = page.locator('.add-tab-item').filter({ hasText: /Claude Code/i }).first()
-        const claudeItemExists = await claudeItem.isVisible().catch(() => false)
-        if (claudeItemExists) {
-          await claudeItem.click()
-          await page.waitForTimeout(800)
-          log('Claude Code agent tab added')
-          await screenshot('06b-claude-code-added')
-        } else {
-          warn('Claude Code option not found — listing available items')
-          if (itemCount > 0) {
-            await items.first().click()
-            await page.waitForTimeout(800)
-            log(`Added first available agent`)
-            await screenshot('06b-first-agent-added')
-          }
-        }
-      } else {
-        warn('.add-tab-drop not visible after clicking +')
-        await screenshot('06-no-dropdown')
-      }
-    } else {
-      warn('.tab-add not found — checking if agents are already present')
-      await screenshot('06-no-add-tab')
-    }
-
-    // ─────────────────────────────────────────
-    // TEST 7: Navigate to agent tab
-    // ─────────────────────────────────────────
-    console.log('\nTEST 7: Navigate to agent tab')
-
-    const allTabs = page.locator('.tab:not(.tab-add):not(.tab-start-all)')
-    const tabCount = await allTabs.count()
-    console.log(`  Total tabs (including General): ${tabCount}`)
-
-    let agentTabClicked = false
-    for (let i = 0; i < tabCount; i++) {
-      const tab = allTabs.nth(i)
-      const txt = await tab.innerText().catch(() => '')
-      console.log(`  Tab ${i}: "${txt.trim().replace(/\n/g, ' ')}"`)
-      if (!txt.toLowerCase().includes('general') && txt.trim()) {
-        await tab.click()
-        await page.waitForTimeout(800)
-        log(`Navigated to tab: "${txt.trim().replace(/\n/g, ' ')}"`)
-        agentTabClicked = true
-        break
-      }
-    }
-    if (!agentTabClicked) warn('No non-General tab found to click')
-    await screenshot('07-agent-tab')
-
-    // ─────────────────────────────────────────
-    // TEST 8: Launch button on agent tab
-    // ─────────────────────────────────────────
-    console.log('\nTEST 8: Launch button visible on agent tab')
-
-    const launchBtn = page.locator('button').filter({ hasText: /Launch/i }).first()
-    const launchExists = await launchBtn.isVisible().catch(() => false)
-    if (launchExists) {
-      log('Launch button visible')
-      await screenshot('08-launch-button')
-    } else {
-      const stopBtn = page.locator('.btn-stop').first()
-      const stopExists = await stopBtn.isVisible().catch(() => false)
-      if (stopExists) log('Agent already online — Stop button visible instead of Launch')
-      else warn('Neither Launch nor Stop button found')
-      await screenshot('08-no-launch-button')
-    }
-
-    // ─────────────────────────────────────────
-    // TEST 9: Go back to General tab — send a message
-    // ─────────────────────────────────────────
-    console.log('\nTEST 9: Send a message in General tab')
-
-    const genTab2 = page.locator('.tab').filter({ hasText: /General/i }).first()
-    await genTab2.click().catch(() => {})
-    await page.waitForTimeout(500)
-
-    const msgInput = page.locator('.sess-input')
+    const msgInput = page.locator('.msg-input')
     const inputExists = await msgInput.isVisible().catch(() => false)
-    if (inputExists) {
-      await msgInput.click()
-      await msgInput.fill('Hello team! This is a test message from the automated test.')
-      await page.waitForTimeout(500)
-      await screenshot('09-message-typed')
+    if (inputExists) log('General message input (.msg-input) visible')
+    else warn('.msg-input textarea not found')
+    await screenshot('04-general-chat')
 
-      const sendBtn = page.locator('.sess-send')
+    // ─────────────────────────────────────────
+    // TEST 5: Target selector dropdown
+    // ─────────────────────────────────────────
+    console.log('\nTEST 5: Target selector dropdown')
+    const tagBtn = page.locator('.tag-btn')
+    if (await tagBtn.isVisible().catch(() => false)) {
+      await tagBtn.click()
+      await page.waitForTimeout(300)
+      const dropdown = page.locator('.tag-dropdown')
+      if (await dropdown.isVisible().catch(() => false)) log('Target dropdown (.tag-dropdown) visible')
+      else warn('Target dropdown did not open')
+      await screenshot('05-target-dropdown')
+      await page.keyboard.press('Escape').catch(() => {})
+    } else {
+      warn('.tag-btn not found')
+    }
+
+    // ─────────────────────────────────────────
+    // TEST 6: Slash command menu
+    // ─────────────────────────────────────────
+    console.log('\nTEST 6: Slash command menu')
+    if (inputExists) {
+      await msgInput.fill('/')
+      await page.waitForTimeout(500)
+      const slashMenu = page.locator('.slash-menu')
+      if (await slashMenu.isVisible().catch(() => false)) log('Slash command menu (.slash-menu) visible')
+      else warn('Slash command menu not visible after typing /')
+      await screenshot('06-slash-menu')
+      await msgInput.fill('')
+    }
+
+    // ─────────────────────────────────────────
+    // TEST 7: Send a message in General chat
+    // ─────────────────────────────────────────
+    console.log('\nTEST 7: Send a message in General chat')
+    if (inputExists) {
+      await msgInput.fill('Hello team! This is a test message from the automated test.')
+      await page.waitForTimeout(300)
+      await screenshot('07-message-typed')
+
+      const sendBtn = page.locator('.btn-send')
       await sendBtn.click()
       await page.waitForTimeout(1000)
-      await screenshot('09b-message-sent')
-      log('Message typed and sent via .sess-send button')
-    } else {
-      warn('.sess-input textarea not found')
-      await screenshot('09-no-input')
+      await screenshot('07b-message-sent')
+      log('Message typed and sent via .btn-send button')
     }
 
     // ─────────────────────────────────────────
-    // TEST 10: Check message appears in chat
+    // TEST 8: Check message appears in chat feed
     // ─────────────────────────────────────────
-    console.log('\nTEST 10: Message appears in chat feed')
-
-    const msgFeed = page.locator('.chat-feed, .msg-wrap, .message, [class*="msg"]').first()
-    const feedExists = await msgFeed.isVisible().catch(() => false)
-    if (feedExists) {
-      log('Chat feed / message element visible')
-    } else {
-      warn('Chat feed not found — checking page text')
-      const bodyText = await page.locator('.main').innerText().catch(() => '')
-      if (bodyText.includes('test message')) log('Test message text found in page')
-      else warn('Test message not visible in page')
-    }
-    await screenshot('10-chat-feed')
+    console.log('\nTEST 8: Message appears in chat feed')
+    const bodyText = await page.locator('body').innerText().catch(() => '')
+    if (bodyText.includes('test message')) log('Test message text found in page')
+    else warn('Test message not visible in page')
+    await screenshot('08-chat-feed')
 
     // ─────────────────────────────────────────
-    // TEST 11: Files / Brain view (sidebar nav)
+    // TEST 9: Brain Files view
     // ─────────────────────────────────────────
-    console.log('\nTEST 11: Files view via sidebar')
-
-    // Close any overlays that might be blocking the click
-    // When sending a message, a picker might appear. Let's click the main background first.
+    console.log('\nTEST 9: Brain Files view via sidebar')
     await page.mouse.click(10, 10)
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(300)
 
-    const filesNav = page.locator('.nav-item').filter({ hasText: /Files/i }).first()
-    const filesNavExists = await filesNav.isVisible().catch(() => false)
-    if (filesNavExists) {
-      await filesNav.click({ force: true }) // Force click to bypass overlays
+    if (await navFiles.isVisible().catch(() => false)) {
+      await navFiles.click({ force: true })
       await page.waitForTimeout(1000)
-      log('Clicked "Files" nav item')
-      await screenshot('11-files-view')
-
-      const fileTree = page.locator('.tree-folder, .tree-file, [class*="tree"]').first()
-      const treeVisible = await fileTree.isVisible().catch(() => false)
-      if (treeVisible) log('File tree visible in Files view')
-      else warn('File tree not visible — brain may be empty or API unavailable')
+      log('Clicked "Brain Files" nav item')
+      await screenshot('09-files-view')
     } else {
-      warn('.nav-item[Files] not found')
-      await screenshot('11-no-files-nav')
+      warn('Brain Files nav not found')
+      await screenshot('09-no-files-nav')
     }
 
     // ─────────────────────────────────────────
-    // TEST 12: Settings view
+    // TEST 10: Settings view
     // ─────────────────────────────────────────
-    console.log('\nTEST 12: Settings view via sidebar')
-
-    const settingsNav = page.locator('.nav-item').filter({ hasText: /Settings/i }).first()
-    const settingsNavExists = await settingsNav.isVisible().catch(() => false)
-    if (settingsNavExists) {
-      await settingsNav.click({ force: true })
+    console.log('\nTEST 10: Settings view via sidebar')
+    if (await navSettings.isVisible().catch(() => false)) {
+      await navSettings.click({ force: true })
       await page.waitForTimeout(800)
       log('Clicked "Settings" nav item')
-      await screenshot('12-settings-view')
+      await screenshot('10-settings-view')
     } else {
-      warn('.nav-item[Settings] not found')
+      warn('Settings nav not found')
     }
 
     // ─────────────────────────────────────────
-    // TEST 13: Go back to session view
+    // TEST 11: Analytics view
     // ─────────────────────────────────────────
-    console.log('\nTEST 13: Navigate back to session')
-
-    const sessionsNav = page.locator('.nav-item').filter({ hasText: /Sessions/i }).first()
-    if (await sessionsNav.isVisible().catch(() => false)) {
-      await sessionsNav.click({ force: true })
-      await page.waitForTimeout(500)
+    console.log('\nTEST 11: Analytics view via sidebar')
+    if (await navAnalytics.isVisible().catch(() => false)) {
+      await navAnalytics.click({ force: true })
+      await page.waitForTimeout(800)
+      log('Clicked "Analytics" nav item')
+      await screenshot('11-analytics-view')
+    } else {
+      warn('Analytics nav not found')
     }
 
-    const sessItem = page.locator('.sess-item').first()
-    const sessItemExists = await sessItem.isVisible().catch(() => false)
-    if (sessItemExists) {
+    // ─────────────────────────────────────────
+    // TEST 12: Return to session view
+    // ─────────────────────────────────────────
+    console.log('\nTEST 12: Navigate back to session')
+    const sessItem = page.locator('.session-card').filter({ hasText: /Session 1/i }).first()
+    if (await sessItem.isVisible().catch(() => false)) {
       await sessItem.click({ force: true })
       await page.waitForTimeout(800)
       log('Clicked session item — returned to session view')
-    }
-    await screenshot('13-back-to-session')
-
-    // ─────────────────────────────────────────
-    // TEST 14: Target selector (@All / @Agent)
-    // ─────────────────────────────────────────
-    console.log('\nTEST 14: Target selector (agent-sel)')
-
-    const agentSel = page.locator('.agent-sel')
-    const selExists = await agentSel.isVisible().catch(() => false)
-    if (selExists) {
-      const options = await agentSel.locator('option').allInnerTexts()
-      log(`Target selector visible — options: ${options.join(', ')}`)
     } else {
-      warn('.agent-sel not found (must be in General tab)')
-      const gt = page.locator('.tab').filter({ hasText: /General/i }).first()
-      await gt.click().catch(() => {})
-      await page.waitForTimeout(500)
-      const selExists2 = await agentSel.isVisible().catch(() => false)
-      if (selExists2) {
-        const options = await agentSel.locator('option').allInnerTexts()
-        log(`Target selector found after switching to General: ${options.join(', ')}`)
-      }
+      warn('Session item not found in sidebar')
     }
-    await screenshot('14-target-selector')
+    await screenshot('12-back-to-session')
 
     // ─────────────────────────────────────────
     // TEST 15: Check for JS errors

@@ -42,7 +42,11 @@ class ErrorHandler extends EventEmitter {
 
   isNotInstalledError(e) {
     const l = e.toLowerCase();
-    return l.includes('enoent') || l.includes('not found') || l.includes('not installed');
+    return l.includes('enoent') || 
+           l.includes('is not recognized as an internal or external command') || 
+           l.includes('command not found') || 
+           l.match(/cannot find (program|executable)/) ||
+           l.match(/not installed/);
   }
 
   isGarbageResponse(content, taskType) {

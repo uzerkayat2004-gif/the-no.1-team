@@ -16,12 +16,38 @@ const AGENT_NAMES = {
   opencode:  'OpenCode',
 };
 
-export default function ResearchPanel({ isOpen, onClose, researchData, combinedDoc }) {
+const STATUS_STYLES = {
+  ready:   { label: 'READY', color: '#52C97A' },
+  warning: { label: 'WARNING', color: '#FACC15' },
+  blocked: { label: 'NO WEB', color: '#F97316' },
+  failed:  { label: 'FAILED', color: '#EF4444' },
+};
+
+function ValidationBadge({ status }) {
+  if (!status) return null;
+  const style = STATUS_STYLES[status] || STATUS_STYLES.failed;
+  return (
+    <span style={{
+      color: style.color,
+      border: `1px solid ${style.color}`,
+      borderRadius: 999,
+      padding: '2px 6px',
+      fontSize: 10,
+      fontWeight: 700,
+    }}>
+      {style.label}
+    </span>
+  );
+}
+
+export default function ResearchPanel({ isOpen, onClose, researchData, researchValidation, combinedDoc }) {
   const [activeTab, setActiveTab] = useState('combined');
 
   if (!isOpen) return null;
 
   const agentIds = Object.keys(researchData || {});
+  const summary = researchValidation?.summary || {};
+  const validation = researchValidation?.byAgent || {};
 
   return (
     <div style={{
@@ -136,6 +162,7 @@ export default function ResearchPanel({ isOpen, onClose, researchData, combinedD
               flexShrink:   0,
             }} />
             {AGENT_NAMES[agentId] || agentId}
+            <ValidationBadge status={validation[agentId]?.status} />
           </button>
         ))}
       </div>
@@ -158,6 +185,21 @@ export default function ResearchPanel({ isOpen, onClose, researchData, combinedD
               }}>
                 Combined Research Document
               </h2>
+              {researchValidation && (
+                <div style={{
+                  display: 'flex',
+                  gap: 10,
+                  flexWrap: 'wrap',
+                  marginBottom: 20,
+                  color: 'var(--text-2)',
+                  fontSize: 12,
+                }}>
+                  <span>Ready: {summary.ready || 0}</span>
+                  <span>No web: {summary.blocked || 0}</span>
+                  <span>Failed: {summary.failed || 0}</span>
+                  <span>Validated URLs: {summary.totalSources || 0}</span>
+                </div>
+              )}
               {combinedDoc ? (
                 <div style={{
                   color:      'var(--text-1)',
@@ -182,10 +224,37 @@ export default function ResearchPanel({ isOpen, onClose, researchData, combinedD
                 fontSize:     18,
                 fontWeight:   600,
                 color:        AGENT_COLORS[activeTab] || 'var(--text-1)',
-                marginBottom: 20,
+                marginBottom: 12,
               }}>
                 {AGENT_NAMES[activeTab] || activeTab} — Raw Research
               </h2>
+              {validation[activeTab] && (
+                <div style={{
+                  border: '1px solid var(--border-2)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: 12,
+                  marginBottom: 20,
+                  color: 'var(--text-2)',
+                  fontSize: 12,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <ValidationBadge status={validation[activeTab].status} />
+                    <span>{validation[activeTab].urlCount || 0} validated URL(s)</span>
+                  </div>
+                  {validation[activeTab].issues?.length > 0 && (
+                    <ul style={{ margin: '8px 0', paddingLeft: 18 }}>
+                      {validation[activeTab].issues.map((issue, idx) => <li key={idx}>{issue}</li>)}
+                    </ul>
+                  )}
+                  {validation[activeTab].urls?.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {validation[activeTab].urls.map(url => (
+                        <a key={url} href={url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', wordBreak: 'break-all' }}>{url}</a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {researchData[activeTab] ? (
                 <div style={{
                   color:      'var(--text-1)',

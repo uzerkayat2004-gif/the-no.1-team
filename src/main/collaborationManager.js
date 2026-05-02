@@ -4,7 +4,7 @@
 const { EventEmitter } = require('events');
 const agentRunner = require('./agentRunner');
 const { injectSkill } = require('./skillBuilder');
-const { getAllProfiles } = require('./providerProfiles');
+const { getAllProfiles, getProfileForMode } = require('./providerProfiles');
 const sessionCtx = require('./sessionContext');
 
 class CollaborationManager extends EventEmitter {
@@ -40,7 +40,7 @@ class CollaborationManager extends EventEmitter {
     state.round = 1;
     this.emit('round-start', { sessionId, round: 1, label: '🧠 Brainstorm — Turn 1: Positions' });
 
-    const turn1 = await this._runAllRoles(state, sessionId, (agentId, agentName, role) =>
+    const turn1 = await this._runAllRoles(state, sessionId, (agentId, agentName, role, profile) =>
       injectSkill(agentName, 'deep',
         `BRAINSTORM TURN 1 — YOUR ROLE: ${role}\n` +
         (role === 'Proposer'
@@ -48,7 +48,7 @@ class CollaborationManager extends EventEmitter {
           : role === 'Critic'
           ? 'Find the top 3 potential weaknesses or risks. Be direct and specific.'
           : 'Verify key claims. What has strong evidence? What needs more proof?') +
-        `\nMax 200 words.\nTASK: ${task}\nRESEARCH: ${combinedDoc}`, context)
+        `\nMax 200 words.\nTASK: ${task}\nRESEARCH: ${combinedDoc}`, context, profile)
     );
     turn1.forEach(r => state.history.push({ round: 1, ...r }));
 
@@ -63,9 +63,9 @@ class CollaborationManager extends EventEmitter {
     this.emit('round-start', { sessionId, round: 2, label: '🧠 Brainstorm — Turn 2: Challenges' });
     const turn1Summary = turn1.map(r => `[${r.agentName} — ${state.roles[r.agentId]}]: ${r.content}`).join('\n\n');
 
-    const turn2 = await this._runAllRoles(state, sessionId, (agentId, agentName, role) =>
+    const turn2 = await this._runAllRoles(state, sessionId, (agentId, agentName, role, profile) =>
       injectSkill(agentName, 'deep',
-        `BRAINSTORM TURN 2 — CROSS CHALLENGE\nChallenge the weakest point from EACH teammate. Back with evidence. Max 200 words.\nTURN 1:\n${turn1Summary}\nRESEARCH: ${combinedDoc}`, context)
+        `BRAINSTORM TURN 2 — CROSS CHALLENGE\nChallenge the weakest point from EACH teammate. Back with evidence. Max 200 words.\nTURN 1:\n${turn1Summary}\nRESEARCH: ${combinedDoc}`, context, profile)
     );
     turn2.forEach(r => state.history.push({ round: 2, ...r }));
 
@@ -80,9 +80,9 @@ class CollaborationManager extends EventEmitter {
     this.emit('round-start', { sessionId, round: 3, label: '🧠 Brainstorm — Turn 3: Evidence Vote' });
     const fullDebate = [...turn1, ...turn2].map(r => `[${r.agentName} — Round ${r.round || state.round}]: ${r.content}`).join('\n\n');
 
-    const turn3 = await this._runAllRoles(state, sessionId, (agentId, agentName, role) =>
+    const turn3 = await this._runAllRoles(state, sessionId, (agentId, agentName, role, profile) =>
       injectSkill(agentName, 'deep',
-        `BRAINSTORM TURN 3 — EVIDENCE VOTE\nVOTE: [your answer in one sentence]\nEVIDENCE: [why - one paragraph]\nVote on EVIDENCE quality.\nDEBATE:\n${fullDebate}`, context)
+        `BRAINSTORM TURN 3 — EVIDENCE VOTE\nVOTE: [your answer in one sentence]\nEVIDENCE: [why - one paragraph]\nVote on EVIDENCE quality.\nDEBATE:\n${fullDebate}`, context, profile)
     );
     turn3.forEach(r => state.history.push({ round: 3, ...r }));
     state.votes = turn3;
@@ -101,10 +101,12 @@ class CollaborationManager extends EventEmitter {
 
   _runAllRoles(state, sessionId, buildPrompt) {
     const profiles = getAllProfiles();
+    const context = sessionCtx.getSession(sessionId);
     return Promise.all(state.agents.map(agentId => {
-      const agentName = profiles[agentId]?.name || agentId;
+      const profile = getProfileForMode(agentId, context?.executionModes?.[agentId]) || profiles[agentId];
+      const agentName = profile?.name || agentId;
       const role = state.roles[agentId] || 'Team Member';
-      return this._runCapture(agentId, agentName, buildPrompt(agentId, agentName, role), sessionId);
+      return this._runCapture(agentId, agentName, buildPrompt(agentId, agentName, role, profile), sessionId);
     }));
   }
 
@@ -122,7 +124,7 @@ class CollaborationManager extends EventEmitter {
       };
       agentRunner.on('agent-chunk', onChunk);
       agentRunner.on('agent-done', onDone);
-      agentRunner.sendToAgent({ task: prompt, workDir: context?.workDir, agent: agentId, model: context?.models?.[agentId], sessionId });
+      agentRunner.sendToAgent({ task: prompt, workDir: context?.workDir, agent: agentId, model: context?.models?.[agentId], executionMode: context?.executionModes?.[agentId], sessionId });
     });
   }
 
