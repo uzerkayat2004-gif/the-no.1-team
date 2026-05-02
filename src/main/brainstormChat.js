@@ -3,7 +3,7 @@
 const { EventEmitter } = require('events');
 const agentRunner = require('./agentRunner');
 const { injectSkill } = require('./skillBuilder');
-const { getAllProfiles } = require('./providerProfiles');
+const { getAllProfiles, normalizeExecutionMode, getProfileForMode } = require('./providerProfiles');
 const sessionCtx = require('./sessionContext');
 
 class BrainstormChat extends EventEmitter {
@@ -22,24 +22,25 @@ class BrainstormChat extends EventEmitter {
   deactivate(sessionId) { this.activeSessions.delete(sessionId); }
   isActive(sessionId) { return this.activeSessions.has(sessionId); }
 
-  async handleMessage({ sessionId, message, fromAgent, targetAgents, allAgents, models }) {
+  async handleMessage({ sessionId, message, fromAgent, targetAgents, allAgents, models, executionModes }) {
     if (!this.isActive(sessionId)) return;
     const profiles = getAllProfiles();
     const context = sessionCtx.getSession(sessionId);
 
     this.chatHistory[sessionId].push({ sender: fromAgent || 'BOSS', content: message, timestamp: new Date().toISOString() });
 
-    const historyStr = this.chatHistory[sessionId].slice(-10).map(h => `[${h.sender}]: ${h.content}`).join('\n');
+    const historyStr = this.chatHistory[sessionId].map(h => `[${h.sender}]: ${h.content}`).join('\n');
     let respondingAgents = targetAgents && targetAgents.length > 0 ? targetAgents : (allAgents || []);
 
     const promises = respondingAgents.map(agentId => {
-      const profile = profiles[agentId];
+      const executionMode = normalizeExecutionMode(agentId, executionModes?.[agentId] || context?.executionModes?.[agentId]);
+      const profile = getProfileForMode(agentId, executionMode) || profiles[agentId];
       if (!profile) return Promise.resolve();
       const prompt = injectSkill(profile.name, 'brainstorm',
-        `CONVERSATION HISTORY (last 10 messages):\n${historyStr}\n\n` +
+        `CONVERSATION HISTORY (entire session):\n${historyStr}\n\n` +
         (targetAgents?.includes(agentId) ? 'You were specifically addressed. Respond directly.' : 'New message from BOSS. Add your perspective if valuable.') +
         '\nRespond naturally as a team member. Keep it conversational.',
-        { ...context, sessionId });
+        { ...context, sessionId }, profile);
 
       return new Promise((resolve) => {
         let response = '';
@@ -54,7 +55,7 @@ class BrainstormChat extends EventEmitter {
         };
         agentRunner.on('agent-chunk', onChunk);
         agentRunner.on('agent-done', onDone);
-        agentRunner.sendToAgent({ task: prompt, workDir: context?.workDir, agent: agentId, model: models?.[agentId] || profile.defaultModel, sessionId });
+        agentRunner.sendToAgent({ task: prompt, workDir: context?.workDir, agent: agentId, model: models?.[agentId] || profile.defaultModel, executionMode, sessionId });
       });
     });
     await Promise.all(promises);
