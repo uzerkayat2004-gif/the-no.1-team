@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import CheckpointMessage from './CheckpointMessage'
 import SeniorAgentSelector from './SeniorAgentSelector'
 import ResearchPanel from './ResearchPanel'
@@ -12,6 +12,14 @@ const AGENT_COLORS = {
   gemini:    'var(--agent-gemini)',
   aider:     'var(--agent-aider)',
   opencode:  'var(--agent-opencode)',
+}
+
+const AGENT_COLOR_RAW = {
+  claude:    '#F07830',
+  codex:     '#9B9BA8',
+  gemini:    '#5B9CF6',
+  aider:     '#52C97A',
+  opencode:  '#F472B6',
 }
 
 function getAgentColor(agentId, agentName) {
@@ -30,7 +38,96 @@ function getAgentColor(agentId, agentName) {
 }
 
 function formatTime(ts) {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const d = new Date(ts)
+  const now = new Date()
+  const diff = Math.floor((now - d) / 1000)
+  if (diff < 5)   return 'just now'
+  if (diff < 60)  return `${diff}s ago`
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+/* Parses message content and wraps code blocks in a header + copy UI */
+function MessageContent({ content }) {
+  const [copied, setCopied] = useState(null)
+
+  const copyCode = useCallback((code, blockIdx) => {
+    navigator.clipboard?.writeText(code).then(() => {
+      setCopied(blockIdx)
+      setTimeout(() => setCopied(null), 1800)
+    })
+  }, [])
+
+  if (!content || typeof content !== 'string') return null
+
+  // Split on fenced code blocks
+  const CODE_BLOCK_RE = /```(\w*)\n?([\s\S]*?)```/g
+  const parts = []
+  let lastIdx = 0
+  let match
+  let blockIdx = 0
+
+  while ((match = CODE_BLOCK_RE.exec(content)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push({ type: 'text', content: content.slice(lastIdx, match.index) })
+    }
+    parts.push({ type: 'code', lang: match[1] || 'code', code: match[2], idx: blockIdx++ })
+    lastIdx = match.index + match[0].length
+  }
+  if (lastIdx < content.length) {
+    parts.push({ type: 'text', content: content.slice(lastIdx) })
+  }
+
+  if (parts.length === 0) {
+    return <div className="msg-content">{content}</div>
+  }
+
+  return (
+    <div className="msg-content">
+      {parts.map((part, i) => {
+        if (part.type === 'text') {
+          return part.content ? <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{part.content}</span> : null
+        }
+        const isCopied = copied === part.idx
+        return (
+          <div key={i} className="code-block">
+            <div className="code-block-header">
+              <span className="code-lang">{part.lang || 'code'}</span>
+              <button className={`code-copy-btn ${isCopied ? 'copied' : ''}`}
+                onClick={() => copyCode(part.code, part.idx)}>
+                {isCopied ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
+            <pre>{part.code}</pre>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* Animated globe with pulsing aura rings */
+function GlobeWithRings({ size = 56 }) {
+  return (
+    <div style={{ position: 'relative', width: size, height: size, marginBottom: 28, flexShrink: 0 }}>
+      {[0, 0.8, 1.6].map((delay, i) => (
+        <span key={i} style={{
+          position: 'absolute', top: '50%', left: '50%',
+          width: size, height: size, borderRadius: '50%',
+          border: `1.5px solid rgba(124,110,250,${0.5 - i * 0.12})`,
+          animation: `auraRing 3s ease-out ${delay}s infinite`,
+          pointerEvents: 'none',
+        }} />
+      ))}
+      <div style={{
+        width: size, height: size, borderRadius: '50%', position: 'absolute', top: 0, left: 0,
+        background: 'linear-gradient(135deg, #7C6EFA 0%, #C06FFB 50%, #F07830 100%)',
+        backgroundSize: '200% 200%',
+        animation: 'gradientShift 6s ease infinite',
+        boxShadow: '0 0 40px rgba(124,110,250,0.35), 0 0 80px rgba(124,110,250,0.12)',
+      }} />
+    </div>
+  )
 }
 
 export default function GeneralTab({ sessionId }) {
@@ -445,9 +542,17 @@ export default function GeneralTab({ sessionId }) {
           if (!profile) return null
           const color = AGENT_COLORS[key] || 'var(--text-2)'
           const running = agentStatus[key] === 'running'
+          const rawColor = AGENT_COLOR_RAW[key] || '#7C6EFA'
           return (
-            <div key={key} className={`agent-chip ${running ? 'running' : ''}`}>
-              <div className="agent-chip-dot" style={{ background: color }} />
+            <div key={key} className={`agent-chip ${running ? 'running' : ''}`}
+              style={running ? {
+                borderColor: rawColor + '55',
+                boxShadow: `0 0 12px ${rawColor}22, inset 0 0 8px ${rawColor}08`,
+              } : {}}>
+              <div className="agent-chip-dot" style={{
+                background: color,
+                boxShadow: running ? `0 0 6px ${rawColor}99` : 'none',
+              }} />
               <span className="agent-chip-name" style={{ color: running ? 'var(--text-1)' : 'var(--text-2)' }}>
                 {profile.name}
               </span>
@@ -480,9 +585,22 @@ export default function GeneralTab({ sessionId }) {
         {/* Empty state */}
         {messages.length === 0 && !showSeniorPicker && (
           <div className="empty-state">
-            <div className="empty-state-globe" />
+            <GlobeWithRings size={60} />
             <div className="empty-state-title">No. 1 Team</div>
-            <div className="empty-state-sub">Select an agent and type / to begin</div>
+            <div className="empty-state-sub">Your multi-agent AI command center is ready</div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', marginBottom: 24 }}>
+              {['/research', '/code', '/debug', '/plan', '/brainstorm'].map(cmd => (
+                <button key={cmd} onClick={() => { setInputText(cmd + ' '); setSlashMenuOpen(false) }}
+                  style={{
+                    background: 'var(--surface-3)', border: '1px solid var(--border-3)',
+                    borderRadius: 'var(--radius-full)', padding: '4px 12px',
+                    font: '400 12px var(--font-mono)', color: 'var(--accent)',
+                    cursor: 'pointer',
+                  }}>
+                  {cmd}
+                </button>
+              ))}
+            </div>
             <button className="empty-state-btn" onClick={() => { setInputText('/'); setSlashMenuOpen(true); setSlashQuery('') }}>
               + New Task
             </button>
@@ -661,7 +779,7 @@ export default function GeneralTab({ sessionId }) {
               )}
               <div className={`msg-bubble ${isBoss ? 'msg-bubble-boss' : ''}`}
                 style={!isBoss ? { borderLeftColor: color + '99' } : {}}>
-                <div className="msg-content">{msg.content}</div>
+                <MessageContent content={msg.content} />
               </div>
             </div>
           )
@@ -764,6 +882,24 @@ export default function GeneralTab({ sessionId }) {
               <span className="task-type-close" onClick={() => { setTaskType(null); setInputText('') }}>×</span>
             </div>
           )}
+          <div className="input-hint">
+            <span className="input-hint-item">
+              <span className="kbd">↵</span>
+              <span>Send</span>
+            </span>
+            <span className="input-hint-item" style={{ marginLeft: 2 }}>
+              <span className="kbd">⇧↵</span>
+              <span>New line</span>
+            </span>
+            <span className="input-hint-item" style={{ marginLeft: 2 }}>
+              <span className="kbd">/</span>
+              <span>Commands</span>
+            </span>
+            <span className="input-hint-item" style={{ marginLeft: 2 }}>
+              <span className="kbd">@</span>
+              <span>Target agent</span>
+            </span>
+          </div>
         </div>
       </div>
     </div>

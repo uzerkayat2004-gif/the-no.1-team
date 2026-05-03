@@ -11,29 +11,66 @@ const PROVIDERS = [
 const TOUR_SLIDES = [
   {
     icon: '⚡',
-    title: 'Give a task. Agents do the work.',
-    desc: 'Type any research or coding task. Multiple AI agents collaborate in parallel to deliver the best result.',
+    title: 'Give a task — agents work together',
+    desc: 'Type any research or coding task. Multiple AI agents collaborate simultaneously, each contributing their best answer.',
   },
   {
     icon: '👑',
-    title: 'One senior agent leads.',
-    desc: 'The Senior Agent synthesizes all agent responses into a final, high-quality answer.',
+    title: 'One senior agent leads the team',
+    desc: 'The Senior Agent synthesizes all responses into a single high-quality final answer you can act on immediately.',
   },
   {
     icon: '✋',
-    title: 'You stay in control.',
-    desc: 'In Manual mode, you approve each checkpoint. In Auto mode, the pipeline runs hands-free.',
+    title: 'You stay in full control',
+    desc: 'Manual mode lets you approve every checkpoint. Auto mode runs the pipeline hands-free. Switch anytime with /mode.',
   },
 ]
 
+function GlobeWithRings({ size = 60, style = {} }) {
+  return (
+    <div style={{
+      position: 'relative', width: size, height: size,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0, ...style,
+    }}>
+      {[0, 0.8, 1.6].map((delay, i) => (
+        <span key={i} style={{
+          position: 'absolute', top: '50%', left: '50%',
+          width: size, height: size, borderRadius: '50%',
+          border: `1.5px solid rgba(124,110,250,${0.5 - i * 0.12})`,
+          animation: `auraRing 3s ease-out ${delay}s infinite`,
+        }} />
+      ))}
+      <div style={{
+        width: size, height: size, borderRadius: '50%',
+        background: 'linear-gradient(135deg, #7C6EFA 0%, #C06FFB 50%, #F07830 100%)',
+        backgroundSize: '200% 200%',
+        animation: 'gradientShift 6s ease infinite',
+        boxShadow: `0 0 ${size * 0.7}px rgba(124,110,250,0.35), 0 0 ${size * 1.3}px rgba(124,110,250,0.12)`,
+        position: 'relative', zIndex: 1,
+      }} />
+    </div>
+  )
+}
+
+function StepProgress({ current, total }) {
+  return (
+    <div className="step-progress">
+      {Array.from({ length: total }).map((_, i) => (
+        <div key={i} className={`step-dot ${i < current ? 'done' : i === current ? 'active' : ''}`} />
+      ))}
+    </div>
+  )
+}
+
 export default function OnboardingFlow({ onComplete }) {
-  const [step, setStep]                     = useState(1)
-  const [installed, setInstalled]           = useState({ 'Claude Code': true })
-  const [proxyType, setProxyType]           = useState('9router')
-  const [proxyUrl, setProxyUrl]             = useState('http://localhost:20128')
-  const [proxyKey, setProxyKey]             = useState('')
-  const [testStatus, setTestStatus]         = useState('')
-  const [tourSlide, setTourSlide]           = useState(0)
+  const [step, setStep]         = useState(1)
+  const [installed, setInstalled] = useState({ 'Claude Code': true })
+  const [proxyType, setProxyType] = useState('9router')
+  const [proxyUrl, setProxyUrl]   = useState('http://localhost:20128')
+  const [proxyKey, setProxyKey]   = useState('')
+  const [testStatus, setTestStatus] = useState('')
+  const [tourSlide, setTourSlide]   = useState(0)
 
   const toggleInstalled = name => setInstalled(p => ({ ...p, [name]: !p[name] }))
 
@@ -47,15 +84,11 @@ export default function OnboardingFlow({ onComplete }) {
     else setStep(5)
   }
 
-  // ── Step 1: Welcome ──────────────────────────────────────────
+  /* ── Step 1: Welcome ── */
   if (step === 1) return (
     <div className="onboarding-screen">
       <div className="onboarding-content center-content">
-        <div style={{
-          width: 72, height: 72, borderRadius: '50%', marginBottom: 28,
-          background: 'linear-gradient(135deg, var(--accent), var(--agent-claude))',
-          boxShadow: '0 0 48px rgba(124,110,250,0.3)', flexShrink: 0,
-        }} />
+        <GlobeWithRings size={64} style={{ marginBottom: 32 }} />
         <h1 className="onboarding-title">Welcome to No. 1 Team</h1>
         <p className="onboarding-subtitle">
           Your multi-agent AI command center.<br />
@@ -65,15 +98,19 @@ export default function OnboardingFlow({ onComplete }) {
         <button className="btn-primary onboarding-btn-large" onClick={() => setStep(2)}>
           Get Started →
         </button>
+        <div style={{ marginTop: 20, font: '400 12px var(--font-body)', color: 'var(--text-3)' }}>
+          Takes about 2 minutes
+        </div>
       </div>
     </div>
   )
 
-  // ── Step 2: Providers ─────────────────────────────────────────
+  /* ── Step 2: Providers ── */
   if (step === 2) return (
     <div className="onboarding-screen">
       <div className="onboarding-content">
-        <h2 className="onboarding-heading">Which AI tools do you have installed?</h2>
+        <StepProgress current={1} total={4} />
+        <h2 className="onboarding-heading">Which AI tools are installed?</h2>
 
         <div className="provider-list">
           {PROVIDERS.map(p => (
@@ -81,7 +118,7 @@ export default function OnboardingFlow({ onComplete }) {
               <span className="provider-icon">{p.icon}</span>
               <div style={{ flex: 1 }}>
                 <div className="provider-name">{p.name}</div>
-                <div style={{ font: '400 11px var(--font-body)', color: 'var(--text-3)', marginTop: 2 }}>{p.desc}</div>
+                <div className="provider-sub">{p.desc}</div>
               </div>
               <div className="provider-actions">
                 <div
@@ -94,20 +131,21 @@ export default function OnboardingFlow({ onComplete }) {
           ))}
         </div>
 
-        <button className="btn-ghost" style={{ marginTop: 12 }}>+ Add Custom Provider</button>
+        <button className="btn-ghost" style={{ marginTop: 10 }}>+ Add Custom Provider</button>
 
         <div className="onboarding-footer">
-          <button className="btn-ghost" onClick={() => setStep(3)}>Skip</button>
-          <button className="btn-primary" onClick={() => setStep(3)}>Test & Continue →</button>
+          <button className="btn-ghost" onClick={() => setStep(1)}>← Back</button>
+          <button className="btn-primary" onClick={() => setStep(3)}>Continue →</button>
         </div>
       </div>
     </div>
   )
 
-  // ── Step 3: Proxy ─────────────────────────────────────────────
+  /* ── Step 3: Proxy ── */
   if (step === 3) return (
     <div className="onboarding-screen">
       <div className="onboarding-content">
+        <StepProgress current={2} total={4} />
         <h2 className="onboarding-heading">Using a proxy or router?</h2>
 
         <div className="radio-group">
@@ -121,7 +159,7 @@ export default function OnboardingFlow({ onComplete }) {
           </label>
           <label className="radio-label">
             <input type="radio" name="proxy" checked={proxyType === 'none'} onChange={() => setProxyType('none')} />
-            <span>No — Direct connections</span>
+            <span>No — Direct connections only</span>
           </label>
         </div>
 
@@ -129,11 +167,13 @@ export default function OnboardingFlow({ onComplete }) {
           <div className="proxy-form">
             <div className="form-group">
               <label className="form-label">Proxy URL</label>
-              <input type="text" value={proxyUrl} onChange={e => setProxyUrl(e.target.value)} placeholder="http://localhost:20128" className="form-input" />
+              <input type="text" value={proxyUrl} onChange={e => setProxyUrl(e.target.value)}
+                placeholder="http://localhost:20128" className="form-input" />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">API Key</label>
-              <input type="password" value={proxyKey} onChange={e => setProxyKey(e.target.value)} placeholder="your-proxy-api-key" className="form-input" />
+              <input type="password" value={proxyKey} onChange={e => setProxyKey(e.target.value)}
+                placeholder="your-proxy-api-key" className="form-input" />
             </div>
           </div>
         )}
@@ -152,17 +192,21 @@ export default function OnboardingFlow({ onComplete }) {
     </div>
   )
 
-  // ── Step 4: Tour ──────────────────────────────────────────────
+  /* ── Step 4: Tour ── */
   if (step === 4) {
     const slide = TOUR_SLIDES[tourSlide]
     return (
       <div className="onboarding-screen">
         <div className="onboarding-content center-content">
+          <StepProgress current={3} total={4} />
+
           <div style={{
-            fontSize: 56, marginBottom: 24, width: 90, height: 90,
+            width: 88, height: 88, fontSize: 42,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: 'var(--surface-3)', borderRadius: 'var(--radius-xl)',
             border: '1px solid var(--border-3)',
+            marginBottom: 28, flexShrink: 0,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
           }}>
             {slide.icon}
           </div>
@@ -173,12 +217,15 @@ export default function OnboardingFlow({ onComplete }) {
           <div className="tour-dots">
             {TOUR_SLIDES.map((_, i) => (
               <span key={i} className={`dot ${i === tourSlide ? 'active' : ''}`}
-                style={{ cursor: 'pointer' }} onClick={() => setTourSlide(i)} />
+                onClick={() => setTourSlide(i)} />
             ))}
           </div>
 
-          <div className="onboarding-footer" style={{ width: '100%', marginTop: 32 }}>
-            <button className="btn-ghost" onClick={() => tourSlide > 0 ? setTourSlide(t => t - 1) : setStep(3)}>← Back</button>
+          <div className="onboarding-footer" style={{ width: '100%', marginTop: 28 }}>
+            <button className="btn-ghost"
+              onClick={() => tourSlide > 0 ? setTourSlide(t => t - 1) : setStep(3)}>
+              ← Back
+            </button>
             <button className="btn-primary" onClick={nextTour}>
               {tourSlide < TOUR_SLIDES.length - 1 ? 'Next →' : 'Finish Tour →'}
             </button>
@@ -188,22 +235,24 @@ export default function OnboardingFlow({ onComplete }) {
     )
   }
 
-  // ── Step 5: Ready ─────────────────────────────────────────────
+  /* ── Step 5: Ready ── */
   if (step === 5) return (
     <div className="onboarding-screen">
       <div className="onboarding-content center-content">
+        <StepProgress current={4} total={4} />
         <div style={{
-          fontSize: 52, marginBottom: 24, width: 90, height: 90,
+          width: 88, height: 88, fontSize: 44,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'var(--surface-3)', borderRadius: 'var(--radius-xl)',
-          border: '1px solid var(--border-3)',
+          background: 'linear-gradient(135deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))',
+          borderRadius: 'var(--radius-xl)', border: '1px solid rgba(34,197,94,0.3)',
+          marginBottom: 28, flexShrink: 0,
         }}>
           🚀
         </div>
         <h1 className="onboarding-title">You're all set.</h1>
         <p className="onboarding-subtitle">
           Your team is ready to work.<br />
-          Type <code style={{ background: 'var(--surface-4)', padding: '2px 6px', borderRadius: 4, fontSize: 14 }}>/</code> in the chat to see all commands.
+          Type <code style={{ background: 'var(--surface-3)', padding: '2px 7px', borderRadius: 5, fontSize: 14, border: '1px solid var(--border-3)' }}>/</code> in the chat to see all commands.
         </p>
         <button className="btn-primary onboarding-btn-large" onClick={onComplete}>
           Launch No. 1 Team →

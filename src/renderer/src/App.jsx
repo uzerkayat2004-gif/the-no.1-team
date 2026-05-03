@@ -356,7 +356,21 @@ export default function App() {
 
     return (
       <div className="sidebar">
-        <div className="sidebar-top">
+        <div className="sidebar-header">
+          <div className="sidebar-app-name">
+            <div className="sidebar-app-dot" />
+            No. 1 Team
+            {sessions.length > 0 && (
+              <span style={{
+                marginLeft: 'auto', font: '500 10px var(--font-body)',
+                color: 'var(--text-3)', background: 'var(--surface-3)',
+                border: '1px solid var(--border-2)', borderRadius: 'var(--radius-full)',
+                padding: '1px 7px',
+              }}>
+                {sessions.length}
+              </span>
+            )}
+          </div>
           <button className="btn-new-session" onClick={createSession}>
             + New Session
           </button>
@@ -364,8 +378,9 @@ export default function App() {
 
         <div className="sidebar-scroll">
           {sessions.length === 0 && (
-            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-disabled)', fontSize: '13px' }}>
-              No sessions yet.<br/>Click "+ New Session" to begin.
+            <div style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--text-3)', font: '400 12px var(--font-body)', lineHeight: 1.8 }}>
+              No sessions yet.<br />
+              <span style={{ color: 'var(--text-4)' }}>Click "+ New Session" to begin.</span>
             </div>
           )}
           {renderGroup('TODAY', groups.today)}
@@ -375,13 +390,13 @@ export default function App() {
 
         <div className="sidebar-bottom">
           <div className="sidebar-link" onClick={() => { setView('brain'); loadBrainTree() }}>
-            🧠 Brain Files
+            <span>🧠</span> Brain Files
           </div>
           <div className="sidebar-link" onClick={() => { setView('settings'); loadSkillsList() }}>
-            ⚙️ Settings
+            <span>⚙️</span> Settings
           </div>
           <div className="sidebar-link" onClick={() => { setView('analytics'); loadAnalytics() }}>
-            📊 Analytics
+            <span>📊</span> Analytics
           </div>
         </div>
 
@@ -486,12 +501,35 @@ export default function App() {
               {renderSidebar()}
               <div className="welcome-screen">
                 <div className="welcome-content">
-                  <div className="welcome-globe" />
+                  {/* Animated globe with aura rings */}
+                  <div style={{ position: 'relative', width: 72, height: 72, marginBottom: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {[0, 0.8, 1.6].map((delay, i) => (
+                      <span key={i} style={{
+                        position: 'absolute', top: '50%', left: '50%',
+                        width: 64, height: 64, borderRadius: '50%',
+                        border: `1.5px solid rgba(124,110,250,${0.5 - i * 0.12})`,
+                        animation: `auraRing 3s ease-out ${delay}s infinite`,
+                      }} />
+                    ))}
+                    <div style={{
+                      width: 60, height: 60, borderRadius: '50%', position: 'relative', zIndex: 1,
+                      background: 'linear-gradient(135deg, #7C6EFA 0%, #C06FFB 50%, #F07830 100%)',
+                      backgroundSize: '200% 200%',
+                      animation: 'gradientShift 6s ease infinite',
+                      boxShadow: '0 0 48px rgba(124,110,250,0.4), 0 0 80px rgba(124,110,250,0.15)',
+                    }} />
+                  </div>
                   <h1 className="welcome-title">No. 1 Team</h1>
-                  <p className="welcome-subtitle">Your multi-agent AI command center.</p>
+                  <p className="welcome-subtitle">
+                    Your multi-agent AI command center.<br />
+                    Coordinate Claude, Codex, Gemini and more.
+                  </p>
                   <button className="btn-accent welcome-btn" onClick={createSession}>
                     + New Session
                   </button>
+                  <div style={{ marginTop: 16, font: '400 12px var(--font-body)', color: 'var(--text-4)' }}>
+                    Type <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4, border: '1px solid var(--border-3)', color: 'var(--text-3)' }}>/</span> in chat for commands
+                  </div>
                 </div>
               </div>
             </div>
