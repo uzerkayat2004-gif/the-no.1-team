@@ -118,10 +118,10 @@ class PipelineManager extends EventEmitter {
 
   _checkpoint(pipeline, checkpointData) {
     return new Promise((resolve) => {
-      // In auto mode, skip ONLY low-stakes intermediate checkpoints.
-      // NEVER auto-approve research-complete — always wait for Boss review.
-      const autoSkipTypes = ['plan-approval', 'plans-ready', 'diagnosis-complete'];
-      if (pipeline.mode === 'auto' && autoSkipTypes.includes(checkpointData.type)) {
+      // In auto mode, skip all intermediate checkpoints automatically.
+      // Only 'final-answer' ALWAYS requires Boss review regardless of mode.
+      const manualOnlyTypes = ['final-answer'];
+      if (pipeline.mode === 'auto' && !manualOnlyTypes.includes(checkpointData.type)) {
         this.emit('auto-approved', {
           sessionId: pipeline.sessionId,
           message: checkpointData.message
@@ -129,8 +129,7 @@ class PipelineManager extends EventEmitter {
         resolve('approved');
         return;
       }
-      // All other checkpoints — including research-complete and final-answer —
-      // ALWAYS require Boss input regardless of mode.
+      // final-answer and any manual-mode checkpoint always requires Boss input.
       pipeline.waitingForBoss = true;
       pipeline._resolveCheckpoint = resolve;
       this.emit('checkpoint', { sessionId: pipeline.sessionId, ...checkpointData });
@@ -215,10 +214,29 @@ class PipelineManager extends EventEmitter {
     const noWebAccess = lower.includes('no_web_access') || lower.includes('[research blocked]');
     const staleMemory = [
       'as of my last update',
+      'as of my training',
+      'as of my knowledge',
       'i cannot browse',
-      'cannot browse',
+      'cannot browse the internet',
+      'cannot browse the web',
       'no access to current',
+      'no access to real-time',
       'do not have access to current',
+      'do not have internet access',
+      'my training data',
+      'my training cutoff',
+      'my knowledge cutoff',
+      'knowledge cut-off',
+      'my knowledge ends',
+      'my knowledge is limited to',
+      'i was trained on',
+      'cut off date',
+      'cutoff date',
+      "i'm unable to browse",
+      'unable to access the internet',
+      'unable to access current',
+      'i lack access to live',
+      'i cannot access live',
     ].some(phrase => lower.includes(phrase));
 
     if (noWebAccess) {
@@ -839,11 +857,29 @@ ${division}`,
 
   // ── GENERAL ──
   async _runGeneral(pipeline) {
-    const { sessionId, task } = pipeline;
-    await this._runAllAgentsCapture(pipeline, (agentId, agentName) =>
-      `You are ${agentName}, a concise member of No. 1 Team. Answer the Boss directly.\n\nBoss message:\n${task}`
+    const { sessionId, task, seniorAgent } = pipeline;
+    const profiles = this._getProviderProfiles(pipeline);
+    this._setPhase(pipeline, 'phase-1-general', '💬 Agents responding...');
+    const results = await this._runAllAgentsCapture(pipeline, (agentId, agentName, profile) =>
+      injectSkill(agentName, 'general', task, sessionCtx.getSession(sessionId), profile)
     );
-    this.emit('pipeline-complete', { sessionId, finalAnswer: null });
+    // Senior agent gives a final synthesis if there's more than one agent
+    let finalAnswer = null;
+    if (pipeline.agents.length > 1 && seniorAgent) {
+      const seniorProfile = profiles[seniorAgent];
+      const combinedResponses = results.filter(r => r.agentId !== seniorAgent)
+        .map(r => `${r.agentName}: ${r.content}`).join('\n\n');
+      if (combinedResponses.trim()) {
+        const synthesis = await this._runAgentCapture(pipeline, seniorAgent,
+          injectSkill(profiles[seniorAgent]?.name || seniorAgent, 'general',
+            `Synthesize the team's responses into one clear, direct answer. Remove redundancy. Keep the best insights.\n\nTeam responses:\n${combinedResponses}\n\nOriginal task:\n${task}`,
+            sessionCtx.getSession(sessionId), seniorProfile),
+          { silent: true }
+        );
+        finalAnswer = synthesis.content;
+      }
+    }
+    this.emit('pipeline-complete', { sessionId, finalAnswer });
   }
 }
 

@@ -490,7 +490,6 @@ export default function GeneralTab({ sessionId, onTitleUpdate }) {
     if (cmd.cmd === '/stop')      { handleStopAll(); setSlashMenuOpen(false); setInputText(''); return }
     if (cmd.cmd === '/clear')     { setMessages([]); setSlashMenuOpen(false); setInputText(''); return }
     if (cmd.cmd === '/workspace') {
-      // Inject the workspace panel card into the chat instead of calling a no-op API
       addMsg({ type: 'workspace-panel', content: 'Workspace', agent: 'System', isSystem: true })
       setSlashMenuOpen(false); setInputText(''); return
     }
@@ -501,12 +500,60 @@ export default function GeneralTab({ sessionId, onTitleUpdate }) {
     if (cmd.cmd === '/mode') {
       const newMode = currentMode === 'auto' ? 'manual' : 'auto'
       setCurrentMode(newMode)
-      addMsg({ type: 'system', content: `⚡ Switched to ${newMode.toUpperCase()} mode`, agent: 'System', isSystem: true })
+      addMsg({ type: 'system', content: `⚡ Switched to ${newMode.toUpperCase()} mode. ${newMode === 'auto' ? 'Intermediate checkpoints will be auto-approved — only the final answer needs your review.' : 'All checkpoints require your approval.'}`, agent: 'System', isSystem: true })
       setSlashMenuOpen(false); setInputText(''); return
     }
     if (cmd.cmd === '/model') {
       addMsg({ type: 'model-selector', content: 'Select models', agent: 'System', isSystem: true })
       setSlashMenuOpen(false); setInputText(''); return
+    }
+    if (cmd.cmd === '/retry') {
+      setSlashMenuOpen(false); setInputText('')
+      if (!originalTask || !currentTaskType) {
+        addMsg({ type: 'system', content: '⚠️ No previous task to retry. Run a task first.', agent: 'System', isSystem: true })
+        return
+      }
+      if (isRunning) {
+        addMsg({ type: 'system', content: '⚠️ A task is already running. Stop it first with /stop.', agent: 'System', isSystem: true })
+        return
+      }
+      addMsg({ type: 'system', content: `🔁 Retrying: "${originalTask.slice(0, 80)}" as ${currentTaskType}`, agent: 'System', isSystem: true })
+      startPipeline(originalTask, currentTaskType, getAgentKeys())
+      return
+    }
+    if (cmd.cmd === '/history') {
+      setSlashMenuOpen(false); setInputText('')
+      const msgCount = messages.filter(m => m.agent === 'You').length
+      const agentMsgs = messages.filter(m => m.agent !== 'You' && !m.isSystem).length
+      const hasPipeline = pipelineComplete
+      const lines = [
+        `📊 **Session Stats**`,
+        `Messages sent: ${msgCount}`,
+        `Agent responses: ${agentMsgs}`,
+        `Mode: ${currentMode.toUpperCase()}`,
+        seniorAgent ? `Senior Agent: ${profiles?.[seniorAgent]?.name || seniorAgent}` : 'Senior Agent: not assigned',
+        originalTask ? `Last task: "${originalTask.slice(0, 60)}" (${currentTaskType})` : 'No tasks run yet',
+        hasPipeline ? 'Last pipeline: complete ✅' : '',
+        workspaceDir ? `Workspace: ${workspaceDir}` : 'Workspace: default',
+      ].filter(Boolean).join('\n')
+      addMsg({ type: 'system', content: lines, agent: 'System', isSystem: true })
+      return
+    }
+    if (cmd.cmd === '/agents') {
+      setSlashMenuOpen(false); setInputText('')
+      const agentKeys = getAgentKeys()
+      const lines = [
+        `🤖 **Active Agents (${agentKeys.length})**`,
+        ...agentKeys.map(key => {
+          const p = profiles?.[key]
+          const role = key === seniorAgent ? '👑 Senior' : '🔵 Sub-agent'
+          const model = selectedModels[key] || p?.defaultModel || '—'
+          const exec = executionModes[key] === 'proxy' ? 'Proxy' : 'Native CLI'
+          return `${role} ${p?.name || key} — ${model} — ${exec}`
+        }),
+      ].join('\n')
+      addMsg({ type: 'system', content: lines, agent: 'System', isSystem: true })
+      return
     }
     setTaskType(cmd.label)
     setInputText(cmd.cmd + ' ')
@@ -528,9 +575,12 @@ export default function GeneralTab({ sessionId, onTitleUpdate }) {
     { icon: '👥', cmd: '/teamcode',  label: 'Team Coding',     desc: 'All agents code simultaneously' },
     { icon: '💬', cmd: '/brainstorm',label: 'Brainstorm',      desc: 'Structured debate' },
     { type: 'header', label: 'ACTIONS' },
+    { icon: '🔁', cmd: '/retry',     label: 'Retry Last Task', desc: 'Re-run the previous task' },
     { icon: '👑', cmd: '/senior',    label: 'Change Senior',   desc: 'Assign new lead' },
     { icon: '🎯', cmd: '/model',     label: 'Change Model',    desc: 'Select AI models' },
     { icon: '⚡', cmd: '/mode',      label: 'Toggle Auto/Manual', desc: 'Switch execution mode' },
+    { icon: '📊', cmd: '/history',   label: 'Session Info',    desc: 'Show current session stats' },
+    { icon: '🤖', cmd: '/agents',    label: 'Agent Status',    desc: 'Show active agents and roles' },
     { icon: '⏹️', cmd: '/stop',     label: 'Stop Agents',     desc: 'Halt execution' },
     { icon: '📁', cmd: '/workspace', label: 'Workspace',       desc: 'Manage local folder' },
     { icon: '🗑️', cmd: '/clear',    label: 'Clear Chat',      desc: 'Delete all messages' },
