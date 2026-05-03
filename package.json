@@ -5,7 +5,9 @@
   "main": "src/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:web": "vite --config vite.config.js",
     "build": "electron-vite build",
+    "build:web": "vite build --config vite.config.js",
     "preview": "electron-vite preview"
   },
   "keywords": [
@@ -26,7 +28,8 @@
     "docx": "^9.6.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "tree-kill": "^1.2.2"
+    "tree-kill": "^1.2.2",
+    "vite": "^8.0.10"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
