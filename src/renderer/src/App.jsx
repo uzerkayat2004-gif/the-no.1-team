@@ -50,7 +50,7 @@ export default function App() {
   const [activeProviders, setActiveProviders] = useState(['claude', 'codex', 'gemini'])
   const [installStatus, setInstallStatus] = useState({})
   const [showAddProvider, setShowAddProvider] = useState(false)
-  const [currentAccent, setCurrentAccent] = useState('#6C63FF')
+  const [currentAccent, setCurrentAccent] = useState('#4361EE')
   const [fontSize, setFontSize] = useState('14px')
   const [density, setDensity] = useState('normal')
   const [profiles, setProfiles] = useState({})
@@ -766,7 +766,7 @@ export default function App() {
                     <label className="form-label" style={{ marginTop: 16 }}>Accent Color</label>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
                       {[
-                        { color: '#6C63FF', label: 'Purple (Default)' },
+                        { color: '#4361EE', label: 'Indigo (Default)' },
                         { color: '#4A90D9', label: 'Blue' },
                         { color: '#E8742A', label: 'Orange' },
                         { color: '#4CAF50', label: 'Green' },

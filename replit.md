@@ -14,21 +14,22 @@ A multi-agent AI command center for orchestrating Claude Code, Codex, Gemini CLI
 - **Package manager**: npm
 - **Build tool**: Vite (standalone config `vite.config.js`) / electron-vite (for original Electron builds)
 
-## Design System (v3)
+## Design System (v4 — Luxury Rebrand)
 
 All design tokens live in `src/renderer/src/styles/theme.css`:
 
-- **Surfaces**: `--surface-0` (#07070D) through `--surface-4` (#20202E) — 5 depth levels
-- **Accent**: `--accent` (#7C6EFA), `--accent-hover`, `--accent-dim`, `--accent-border`, `--accent-glow`
-- **Agent colors**: `--agent-claude` (#F07830), `--agent-codex`, `--agent-gemini`, `--agent-aider`, `--agent-opencode`, `--agent-boss`
-- **Text**: `--text-1` through `--text-4`
-- **Borders**: `--border-1` through `--border-3`
+- **Surfaces**: `--surface-0` (#060810) through `--surface-4` (#1A1F35) — deep midnight-navy, not pure black
+- **Accent**: `--accent` (#4361EE — confident indigo), `--accent-hover` (#5472F5), `--accent-dim`, `--accent-border`, `--accent-glow`
+- **Agent colors**: claude #F08040 (amber), codex #8B5CF6 (electric violet), gemini #38BDF8 (sky blue), aider #34D399 (emerald), opencode #F472B6 (pink), boss #F0C040 (gold)
+- **Text**: `--text-1` (#EEF0FF, blue-white tint) through `--text-4` (#252938)
+- **Borders**: `--border-1` (#0E1220) through `--border-3` (#1E2438) — dark navy-tinted
 - **Fonts**: `--font-display` (Space Grotesk), `--font-body` (Inter), `--font-mono` (JetBrains Mono)
 - **Button classes**: `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-ghost`, `.btn-accent`
 - **Keyboard badge**: `.kbd`
 - **Globe**: `.globe-wrapper`, `.globe-sphere`, `.globe-ring` for animated sphere with aura rings
 - **Code blocks**: `.code-block`, `.code-block-header`, `.code-lang`, `.code-copy-btn`
-- **Legacy aliases**: `--bg-input`, `--text-primary`, `--border` etc. all mapped
+- **Grid texture**: 40px crosshatch on `.view-area` and `.onboarding-screen` (not dots)
+- **Ambient lighting**: Multi-layer radial gradient in `.welcome-screen::before` and `.onboarding-screen::before`
 
 ### Key Animations
 - `@keyframes auraRing` — expanding ring from center (used for globe aura)
@@ -37,7 +38,7 @@ All design tokens live in `src/renderer/src/styles/theme.css`:
 - `@keyframes pulse` — opacity fade (used for running agent chip dot)
 - `@keyframes typingBounce` — bounce dots (used for typing indicator)
 - `@keyframes msgIn` — message entry slide-up
-- `html::before` — subtle 24px dot-grid texture on all surfaces
+- `@keyframes luxuryGlow` — slow ambient glow breathe (welcome/onboarding screens)
 
 ## Project Structure
 
