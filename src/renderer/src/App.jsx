@@ -538,7 +538,7 @@ export default function App() {
               <div className="welcome-screen">
                 <div className="welcome-content">
                   {/* Realistic spinning Earth globe */}
-                  <WorldGlobe size={72} style={{ marginBottom: 32 }} />
+                  <WorldGlobe size={156} interactive style={{ marginBottom: 32 }} />
                   <h1 className="welcome-title">No. 1 Team</h1>
                   <p className="welcome-subtitle">
                     Your multi-agent AI command center.<br />

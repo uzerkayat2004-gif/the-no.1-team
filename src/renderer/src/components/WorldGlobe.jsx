@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 
 /* ──────────────────────────────────────────────────────────────────────
    Simplified Mercator continent map — 400×200 — doubled for seamless
@@ -43,67 +43,224 @@ function buildEarthSVG(ocean, land, land2) {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   WorldGlobe — spinning realistic Earth with orbiting rings.
-   Colors adapt to the current app theme automatically.
+   WorldGlobe — spinning Earth with drag-to-rotate interactivity.
+
+   Props:
+     size        — diameter in px (default 80)
+     interactive — enable drag/touch rotation (default false)
+     style       — extra wrapper styles
    ────────────────────────────────────────────────────────────────────── */
-export default function WorldGlobe({ size = 80, style = {} }) {
+export default function WorldGlobe({ size = 80, interactive = false, style = {} }) {
   const isLight = typeof document !== 'undefined' &&
     document.documentElement.getAttribute('data-theme') === 'light'
 
   /* ── Earth surface colors ── */
-  const oceanColor   = isLight ? '#A8714A' : '#082356'
-  const landColor    = isLight ? '#6B4A1E' : '#2e6b28'
-  const landColor2   = isLight ? '#4E6B18' : '#3a8232'
+  const oceanColor  = isLight ? '#A8714A' : '#082356'
+  const landColor   = isLight ? '#6B4A1E' : '#2e6b28'
+  const landColor2  = isLight ? '#4E6B18' : '#3a8232'
 
   const earthUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
     buildEarthSVG(oceanColor, landColor, landColor2)
   )}`
 
   /* ── Atmosphere & sphere depth ── */
-  const atmosphereColor  = isLight
+  const atmosphereColor = isLight
     ? 'radial-gradient(circle, rgba(196,79,0,0.18) 45%, rgba(160,60,0,0.08) 70%, transparent 100%)'
     : 'radial-gradient(circle, rgba(60,130,255,0.14) 45%, rgba(20,70,180,0.07) 70%, transparent 100%)'
 
-  const oceanBase        = isLight
+  const oceanBase = isLight
     ? 'radial-gradient(circle at 38% 36%, #8B5030 0%, #5A2E10 55%, #2E1005 100%)'
     : 'radial-gradient(circle at 38% 36%, #0c3f80 0%, #062050 55%, #030e28 100%)'
 
-  const sphereGlow       = isLight
+  const sphereGlow = isLight
     ? `0 0 0 1.5px rgba(196,79,0,0.28), 0 0 ${Math.round(size * 0.45)}px rgba(130,50,0,0.50), 0 6px ${Math.round(size * 0.3)}px rgba(0,0,0,0.50)`
     : `0 0 0 1.5px rgba(80,160,255,0.22), 0 0 ${Math.round(size * 0.45)}px rgba(15,65,160,0.55), 0 6px ${Math.round(size * 0.3)}px rgba(0,0,0,0.65)`
 
   /* ── Orbital ring colors ── */
-  const ring1Border    = isLight ? 'rgba(196,120,40,0.42)' : 'rgba(90,190,255,0.40)'
-  const ring1Shadow    = isLight ? '0 0 8px rgba(196,100,20,0.12) inset' : '0 0 8px rgba(90,190,255,0.10) inset'
-  const ring2Border    = isLight ? 'rgba(160,100,30,0.32)' : 'rgba(170,130,255,0.32)'
+  const ring1Border = isLight ? 'rgba(196,120,40,0.42)' : 'rgba(90,190,255,0.40)'
+  const ring1Shadow = isLight ? '0 0 8px rgba(196,100,20,0.12) inset' : '0 0 8px rgba(90,190,255,0.10) inset'
+  const ring2Border = isLight ? 'rgba(160,100,30,0.32)' : 'rgba(170,130,255,0.32)'
 
   /* ── Orbital particle colors ── */
-  const dot1Bg         = isLight
+  const dot1Bg = isLight
     ? 'radial-gradient(circle, #FFE0A0 0%, #E08820 55%, transparent 100%)'
     : 'radial-gradient(circle, #c8eeff 0%, #5abcff 55%, transparent 100%)'
-  const dot1Shadow     = isLight
+  const dot1Shadow = isLight
     ? '0 0 8px rgba(230,140,0,1), 0 0 18px rgba(230,120,0,0.5)'
     : '0 0 8px rgba(90,200,255,1), 0 0 18px rgba(90,200,255,0.5)'
-
-  const dot2Bg         = isLight
+  const dot2Bg = isLight
     ? 'radial-gradient(circle, #FFD080 0%, #C07010 55%, transparent 100%)'
     : 'radial-gradient(circle, #eedeff 0%, #b080ff 55%, transparent 100%)'
-  const dot2Shadow     = isLight
+  const dot2Shadow = isLight
     ? '0 0 7px rgba(200,120,0,0.9), 0 0 14px rgba(180,100,0,0.4)'
     : '0 0 7px rgba(170,130,255,0.9), 0 0 14px rgba(170,130,255,0.4)'
 
   const orbitW1 = size * 1.78
   const orbitW2 = size * 1.52
 
-  return (
-    <div style={{
-      position: 'relative',
-      width: size, height: size,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      flexShrink: 0,
-      ...style,
-    }}>
+  /* ── Interactive drag + rAF animation ── */
+  const textureRef  = useRef(null)
+  const wrapperRef  = useRef(null)
+  const animRef     = useRef(null)
+  const [isDragging, setIsDragging] = useState(false)
 
+  // All mutable animation state lives here (no re-renders during rAF)
+  const st = useRef({
+    spinX:      0,      // current X scroll offset in px [0, size)
+    offsetY:    50,     // vertical texture offset % [15, 85]
+    velX:       0,      // horizontal momentum px/s (positive = eastward)
+    velY:       0,      // vertical momentum %/s
+    dragging:   false,
+    lastX:      0,
+    lastY:      0,
+    lastMoveTime: 0,
+    dragVelX:   0,      // instantaneous drag velocity px/s
+    dragVelY:   0,
+    lastFrame:  performance.now(),
+  })
+
+  /* rAF-driven animation loop — runs whenever interactive=true */
+  useEffect(() => {
+    if (!interactive) return
+
+    const AUTO_SPEED = size / 22  // px/s — one revolution per 22s (same as CSS)
+
+    function frame(now) {
+      const s = st.current
+      const dt = Math.min((now - s.lastFrame) / 1000, 0.05)
+      s.lastFrame = now
+
+      if (!s.dragging) {
+        // Auto-spin westward
+        s.spinX += AUTO_SPEED * dt
+
+        // Horizontal momentum (decays after drag)
+        s.spinX -= s.velX * dt
+        s.velX  *= Math.pow(0.88, dt * 60)
+        if (Math.abs(s.velX) < 0.2) s.velX = 0
+
+        // Vertical spring — gently return to equator when not dragging
+        s.velY  *= Math.pow(0.82, dt * 60)
+        s.offsetY += s.velY * dt
+        s.offsetY += (50 - s.offsetY) * Math.min(dt * 2.5, 1)
+        s.offsetY  = Math.max(15, Math.min(85, s.offsetY))
+      }
+
+      // Wrap horizontal offset to [0, size)
+      s.spinX = ((s.spinX % size) + size) % size
+
+      // Write directly to DOM (zero React re-renders during animation)
+      if (textureRef.current) {
+        textureRef.current.style.transform = `translateX(${-s.spinX}px)`
+        textureRef.current.style.backgroundPositionY = `${s.offsetY}%`
+      }
+
+      animRef.current = requestAnimationFrame(frame)
+    }
+
+    animRef.current = requestAnimationFrame(frame)
+    return () => cancelAnimationFrame(animRef.current)
+  }, [interactive, size])
+
+  /* Drag event handlers */
+  useEffect(() => {
+    if (!interactive) return
+    const el = wrapperRef.current
+    if (!el) return
+
+    const getPos = (e) => e.touches
+      ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      : { x: e.clientX, y: e.clientY }
+
+    const onDown = (e) => {
+      const { x, y } = getPos(e)
+      const s = st.current
+      s.dragging    = true
+      s.lastX       = x
+      s.lastY       = y
+      s.dragVelX    = 0
+      s.dragVelY    = 0
+      s.lastMoveTime = performance.now()
+      setIsDragging(true)
+      e.preventDefault()
+    }
+
+    const onMove = (e) => {
+      const s = st.current
+      if (!s.dragging) return
+      const { x, y } = getPos(e)
+      const dx = x - s.lastX
+      const dy = y - s.lastY
+      const now = performance.now()
+      const elapsed = Math.max(1, now - s.lastMoveTime)
+      s.lastX = x
+      s.lastY = y
+      s.lastMoveTime = now
+
+      // Drag sensitivity: 1:1 horizontal, scaled vertical
+      s.spinX -= dx
+      s.spinX = ((s.spinX % size) + size) % size
+
+      // Vertical: full drag of (size / 2) px = 30% latitude shift
+      const latSensitivity = 30 / Math.max(size / 2, 1)
+      s.offsetY += dy * latSensitivity
+      s.offsetY  = Math.max(15, Math.min(85, s.offsetY))
+
+      // Track instantaneous velocity for momentum on release
+      s.dragVelX = -(dx / elapsed) * 1000   // px/s, inverted (drag-right = spin-west)
+      s.dragVelY =  (dy / elapsed) * 1000 * latSensitivity
+
+      e.preventDefault()
+    }
+
+    const onUp = () => {
+      const s = st.current
+      if (!s.dragging) return
+      s.dragging = false
+      // Hand off drag velocity to the momentum system
+      s.velX = s.dragVelX * 0.35
+      s.velY = s.dragVelY * 0.30
+      setIsDragging(false)
+    }
+
+    el.addEventListener('mousedown',  onDown)
+    el.addEventListener('touchstart', onDown, { passive: false })
+    window.addEventListener('mousemove',  onMove)
+    window.addEventListener('touchmove',  onMove, { passive: false })
+    window.addEventListener('mouseup',   onUp)
+    window.addEventListener('touchend',  onUp)
+
+    return () => {
+      el.removeEventListener('mousedown',  onDown)
+      el.removeEventListener('touchstart', onDown)
+      window.removeEventListener('mousemove',  onMove)
+      window.removeEventListener('touchmove',  onMove)
+      window.removeEventListener('mouseup',   onUp)
+      window.removeEventListener('touchend',  onUp)
+    }
+  }, [interactive, size])
+
+  /* ── Dot size scales with globe ── */
+  const dotSize1 = Math.max(6, Math.round(size * 0.055))
+  const dotSize2 = Math.max(5, Math.round(size * 0.048))
+
+  return (
+    <div
+      ref={wrapperRef}
+      style={{
+        position: 'relative',
+        width:  size,
+        height: size,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        cursor: interactive ? (isDragging ? 'grabbing' : 'grab') : 'default',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        ...style,
+      }}
+    >
       {/* ── Atmosphere glow ── */}
       <div style={{
         position: 'absolute',
@@ -118,18 +275,18 @@ export default function WorldGlobe({ size = 80, style = {} }) {
       <div style={{
         position: 'absolute',
         top: '50%', left: '50%',
-        width: orbitW1, height: orbitW1,
+        width:     orbitW1, height: orbitW1,
         marginLeft: -(orbitW1 / 2), marginTop: -(orbitW1 / 2),
         borderRadius: '50%',
-        border: `1.2px solid ${ring1Border}`,
+        border: `${Math.max(1, size * 0.008)}px solid ${ring1Border}`,
         boxShadow: ring1Shadow,
         animation: 'worldOrbit1 7s linear infinite',
         pointerEvents: 'none', zIndex: 0,
       }}>
         <div style={{
           position: 'absolute',
-          top: -4, left: '50%', marginLeft: -4,
-          width: 8, height: 8, borderRadius: '50%',
+          top:  -(dotSize1 / 2), left: '50%', marginLeft: -(dotSize1 / 2),
+          width: dotSize1, height: dotSize1, borderRadius: '50%',
           background: dot1Bg,
           boxShadow: dot1Shadow,
         }} />
@@ -139,17 +296,17 @@ export default function WorldGlobe({ size = 80, style = {} }) {
       <div style={{
         position: 'absolute',
         top: '50%', left: '50%',
-        width: orbitW2, height: orbitW2,
+        width:     orbitW2, height: orbitW2,
         marginLeft: -(orbitW2 / 2), marginTop: -(orbitW2 / 2),
         borderRadius: '50%',
-        border: `1px solid ${ring2Border}`,
+        border: `${Math.max(1, size * 0.007)}px solid ${ring2Border}`,
         animation: 'worldOrbit2 11s linear infinite',
         pointerEvents: 'none', zIndex: 0,
       }}>
         <div style={{
           position: 'absolute',
-          top: -3.5, left: '50%', marginLeft: -3.5,
-          width: 7, height: 7, borderRadius: '50%',
+          top:  -(dotSize2 / 2), left: '50%', marginLeft: -(dotSize2 / 2),
+          width: dotSize2, height: dotSize2, borderRadius: '50%',
           background: dot2Bg,
           boxShadow: dot2Shadow,
         }} />
@@ -171,16 +328,23 @@ export default function WorldGlobe({ size = 80, style = {} }) {
           background: oceanBase,
         }} />
 
-        {/* Scrolling continent map */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          width: '200%', height: '100%',
-          backgroundImage: `url("${earthUri}")`,
-          backgroundSize: '50% 100%',
-          backgroundRepeat: 'repeat-x',
-          backgroundPosition: '0 center',
-          animation: 'earthSpin 22s linear infinite',
-        }} />
+        {/* Scrolling continent map
+            — interactive: driven by rAF via ref, no CSS animation
+            — non-interactive: CSS animation as before */}
+        <div
+          ref={interactive ? textureRef : undefined}
+          style={{
+            position: 'absolute', inset: 0,
+            width: '200%', height: '100%',
+            backgroundImage: `url("${earthUri}")`,
+            backgroundSize: '50% 100%',
+            backgroundRepeat: 'repeat-x',
+            backgroundPosition: '0 center',
+            // Use CSS keyframe animation when not interactive (simpler, no JS overhead)
+            ...(interactive ? {} : { animation: 'earthSpin 22s linear infinite' }),
+            willChange: interactive ? 'transform' : 'auto',
+          }}
+        />
 
         {/* Specular highlight — top-left */}
         <div style={{
@@ -215,7 +379,35 @@ export default function WorldGlobe({ size = 80, style = {} }) {
             : 'linear-gradient(180deg, rgba(180,220,255,0.04) 0%, transparent 38%, transparent 62%, rgba(0,10,40,0.10) 100%)',
           pointerEvents: 'none',
         }} />
+
+        {/* Drag hint ring — only shows when interactive and idle */}
+        {interactive && !isDragging && (
+          <div style={{
+            position: 'absolute', inset: 0, borderRadius: '50%',
+            background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.04)',
+            pointerEvents: 'none',
+          }} />
+        )}
       </div>
+
+      {/* Drag hint label — only on large interactive globes */}
+      {interactive && size >= 120 && (
+        <div style={{
+          position: 'absolute',
+          bottom: -(size * 0.22),
+          left: '50%',
+          transform: 'translateX(-50%)',
+          font: `400 ${Math.round(size * 0.075)}px var(--font-body, sans-serif)`,
+          color: 'rgba(255,255,255,0.18)',
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+          letterSpacing: '0.06em',
+          userSelect: 'none',
+        }}>
+          drag to explore
+        </div>
+      )}
     </div>
   )
 }

@@ -63,7 +63,7 @@ export default function OnboardingFlow({ onComplete }) {
   if (step === 1) return (
     <div className="onboarding-screen">
       <div className="onboarding-content center-content">
-        <WorldGlobe size={64} style={{ marginBottom: 32 }} />
+        <WorldGlobe size={148} interactive style={{ marginBottom: 36 }} />
         <h1 className="onboarding-title">Welcome to No. 1 Team</h1>
         <p className="onboarding-subtitle">
           Your multi-agent AI command center.<br />

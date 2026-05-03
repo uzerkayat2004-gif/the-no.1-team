@@ -667,7 +667,7 @@ export default function GeneralTab({ sessionId, onTitleUpdate }) {
         {/* Empty state */}
         {messages.length === 0 && !showSeniorPicker && (
           <div className="empty-state">
-            <WorldGlobe size={60} style={{ marginBottom: 28 }} />
+            <WorldGlobe size={156} interactive style={{ marginBottom: 28 }} />
             <div className="empty-state-title">No. 1 Team</div>
             <div className="empty-state-sub">Your multi-agent AI command center is ready</div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', marginBottom: 24 }}>
