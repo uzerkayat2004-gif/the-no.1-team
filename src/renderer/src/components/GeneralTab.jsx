@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import WorldGlobe from './WorldGlobe'
 import CheckpointMessage from './CheckpointMessage'
 import SeniorAgentSelector from './SeniorAgentSelector'
 import ResearchPanel from './ResearchPanel'
@@ -106,29 +107,6 @@ function MessageContent({ content }) {
   )
 }
 
-/* Animated globe with pulsing aura rings */
-function GlobeWithRings({ size = 56 }) {
-  return (
-    <div style={{ position: 'relative', width: size, height: size, marginBottom: 28, flexShrink: 0 }}>
-      {[0, 0.8, 1.6].map((delay, i) => (
-        <span key={i} style={{
-          position: 'absolute', top: '50%', left: '50%',
-          width: size, height: size, borderRadius: '50%',
-          border: `1.5px solid rgba(124,110,250,${0.5 - i * 0.12})`,
-          animation: `auraRing 3s ease-out ${delay}s infinite`,
-          pointerEvents: 'none',
-        }} />
-      ))}
-      <div style={{
-        width: size, height: size, borderRadius: '50%', position: 'absolute', top: 0, left: 0,
-        background: 'linear-gradient(135deg, #7C6EFA 0%, #C06FFB 50%, #F07830 100%)',
-        backgroundSize: '200% 200%',
-        animation: 'gradientShift 6s ease infinite',
-        boxShadow: '0 0 40px rgba(124,110,250,0.35), 0 0 80px rgba(124,110,250,0.12)',
-      }} />
-    </div>
-  )
-}
 
 export default function GeneralTab({ sessionId }) {
   const [messages, setMessages]               = useState([])
@@ -585,7 +563,7 @@ export default function GeneralTab({ sessionId }) {
         {/* Empty state */}
         {messages.length === 0 && !showSeniorPicker && (
           <div className="empty-state">
-            <GlobeWithRings size={60} />
+            <WorldGlobe size={60} style={{ marginBottom: 28 }} />
             <div className="empty-state-title">No. 1 Team</div>
             <div className="empty-state-sub">Your multi-agent AI command center is ready</div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', marginBottom: 24 }}>

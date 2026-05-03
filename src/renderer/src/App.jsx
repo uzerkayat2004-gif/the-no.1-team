@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import GeneralTab from './components/GeneralTab'
 import OnboardingFlow from './components/OnboardingFlow'
 import ToastContainer from './components/ToastNotification'
+import WorldGlobe from './components/WorldGlobe'
 
 function ts() { return new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) }
 function uid() { return Math.random().toString(36).slice(2) }
@@ -501,24 +502,8 @@ export default function App() {
               {renderSidebar()}
               <div className="welcome-screen">
                 <div className="welcome-content">
-                  {/* Animated globe with aura rings */}
-                  <div style={{ position: 'relative', width: 72, height: 72, marginBottom: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {[0, 0.8, 1.6].map((delay, i) => (
-                      <span key={i} style={{
-                        position: 'absolute', top: '50%', left: '50%',
-                        width: 64, height: 64, borderRadius: '50%',
-                        border: `1.5px solid rgba(124,110,250,${0.5 - i * 0.12})`,
-                        animation: `auraRing 3s ease-out ${delay}s infinite`,
-                      }} />
-                    ))}
-                    <div style={{
-                      width: 60, height: 60, borderRadius: '50%', position: 'relative', zIndex: 1,
-                      background: 'linear-gradient(135deg, #7C6EFA 0%, #C06FFB 50%, #F07830 100%)',
-                      backgroundSize: '200% 200%',
-                      animation: 'gradientShift 6s ease infinite',
-                      boxShadow: '0 0 48px rgba(124,110,250,0.4), 0 0 80px rgba(124,110,250,0.15)',
-                    }} />
-                  </div>
+                  {/* Realistic spinning Earth globe */}
+                  <WorldGlobe size={72} style={{ marginBottom: 32 }} />
                   <h1 className="welcome-title">No. 1 Team</h1>
                   <p className="welcome-subtitle">
                     Your multi-agent AI command center.<br />

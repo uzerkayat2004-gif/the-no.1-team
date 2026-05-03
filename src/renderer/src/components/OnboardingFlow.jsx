@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import WorldGlobe from './WorldGlobe'
 
 const PROVIDERS = [
   { name: 'Claude Code', icon: '🟠', desc: 'Anthropic\'s powerful coding agent' },
@@ -26,32 +27,6 @@ const TOUR_SLIDES = [
   },
 ]
 
-function GlobeWithRings({ size = 60, style = {} }) {
-  return (
-    <div style={{
-      position: 'relative', width: size, height: size,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      flexShrink: 0, ...style,
-    }}>
-      {[0, 0.8, 1.6].map((delay, i) => (
-        <span key={i} style={{
-          position: 'absolute', top: '50%', left: '50%',
-          width: size, height: size, borderRadius: '50%',
-          border: `1.5px solid rgba(124,110,250,${0.5 - i * 0.12})`,
-          animation: `auraRing 3s ease-out ${delay}s infinite`,
-        }} />
-      ))}
-      <div style={{
-        width: size, height: size, borderRadius: '50%',
-        background: 'linear-gradient(135deg, #7C6EFA 0%, #C06FFB 50%, #F07830 100%)',
-        backgroundSize: '200% 200%',
-        animation: 'gradientShift 6s ease infinite',
-        boxShadow: `0 0 ${size * 0.7}px rgba(124,110,250,0.35), 0 0 ${size * 1.3}px rgba(124,110,250,0.12)`,
-        position: 'relative', zIndex: 1,
-      }} />
-    </div>
-  )
-}
 
 function StepProgress({ current, total }) {
   return (
@@ -88,7 +63,7 @@ export default function OnboardingFlow({ onComplete }) {
   if (step === 1) return (
     <div className="onboarding-screen">
       <div className="onboarding-content center-content">
-        <GlobeWithRings size={64} style={{ marginBottom: 32 }} />
+        <WorldGlobe size={64} style={{ marginBottom: 32 }} />
         <h1 className="onboarding-title">Welcome to No. 1 Team</h1>
         <p className="onboarding-subtitle">
           Your multi-agent AI command center.<br />
