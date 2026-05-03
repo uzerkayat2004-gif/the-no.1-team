@@ -14,31 +14,55 @@ A multi-agent AI command center for orchestrating Claude Code, Codex, Gemini CLI
 - **Package manager**: npm
 - **Build tool**: Vite (standalone config `vite.config.js`) / electron-vite (for original Electron builds)
 
-## Design System (v4 — Luxury Rebrand)
+## Design System (v5 — Dual Theme)
 
-All design tokens live in `src/renderer/src/styles/theme.css`:
+All design tokens live in `src/renderer/src/styles/theme.css`.
 
-- **Surfaces**: `--surface-0` (#060810) through `--surface-4` (#1A1F35) — deep midnight-navy, not pure black
-- **Accent**: `--accent` (#4361EE — confident indigo), `--accent-hover` (#5472F5), `--accent-dim`, `--accent-border`, `--accent-glow`
-- **Agent colors**: claude #F08040 (amber), codex #8B5CF6 (electric violet), gemini #38BDF8 (sky blue), aider #34D399 (emerald), opencode #F472B6 (pink), boss #F0C040 (gold)
-- **Text**: `--text-1` (#EEF0FF, blue-white tint) through `--text-4` (#252938)
-- **Borders**: `--border-1` (#0E1220) through `--border-3` (#1E2438) — dark navy-tinted
-- **Fonts**: `--font-display` (Space Grotesk), `--font-body` (Inter), `--font-mono` (JetBrains Mono)
-- **Button classes**: `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-ghost`, `.btn-accent`
-- **Keyboard badge**: `.kbd`
-- **Globe**: `.globe-wrapper`, `.globe-sphere`, `.globe-ring` for animated sphere with aura rings
-- **Code blocks**: `.code-block`, `.code-block-header`, `.code-lang`, `.code-copy-btn`
-- **Grid texture**: 40px crosshatch on `.view-area` and `.onboarding-screen` (not dots)
-- **Ambient lighting**: Multi-layer radial gradient in `.welcome-screen::before` and `.onboarding-screen::before`
+### Themes
+Two complete themes, toggled via the ☀/🌙 button in the sidebar footer. Preference saved to `localStorage` key `no1team_theme`.
+
+**Dark (default) — pure black + warm orange**
+- Surfaces: `--surface-0` (#080808) → `--surface-4` (#2A2A2A) — true black
+- Accent: `--accent` (#F97316 orange), `--accent-hover` (#FB923C)
+- Text: `--text-1` (#FAFAFA), `--text-2` (#A3A3A3), `--text-3` (#525252)
+- Applied via `:root` (default when no `data-theme` attribute present)
+
+**Light — warm cream/ivory + deep orange**
+- Surfaces: `--surface-0` (#FBF5EC cream) → `--surface-4` (#D8C09E tan)
+- Accent: `--accent` (#C44F00 deep orange), `--accent-hover` (#D45800)
+- Text: `--text-1` (#1A0800 rich brown), `--text-2` (#6B3E1E), `--text-3` (#A0724A)
+- Applied via `[data-theme="light"]` override block
+
+### CSS Variable Architecture
+All glassmorphism backgrounds use variables (not hardcoded rgba), so they adapt automatically:
+- `--glass-bar`: translucent surface for agent bar / title bar
+- `--glass-heavy`: messaging bar / modals
+- `--glass-menu`: slash menu / context menu / dropdowns
+- `--glass-input`: input wrapper background
+- `--grid-line`: 40px crosshatch grid line color (adapts per theme)
+- `--glow-a/b/c`: welcome screen ambient glow colors
+
+### Agent Colors (dark)
+claude #FB923C · codex #A78BFA · gemini #60A5FA · aider #4ADE80 · opencode #F472B6 · boss #FDE047
+
+### Agent Colors (light)
+claude #C44F00 · codex #6D28D9 · gemini #1D4ED8 · aider #15803D · opencode #BE185D · boss #B45309
+
+### Theme Toggle
+- State: `const [theme, setTheme] = useState(...)` in App.jsx
+- Effect: `document.documentElement.setAttribute('data-theme', theme)` + localStorage save
+- Button: `.theme-toggle-btn` in `.sidebar-bottom-row` (shows ☀ in dark, 🌙 in light)
 
 ### Key Animations
-- `@keyframes auraRing` — expanding ring from center (used for globe aura)
-- `@keyframes gradientShift` — background-position sweep (used for sphere color)
-- `@keyframes shimmer` — left-to-right shimmer (used for New Session button)
-- `@keyframes pulse` — opacity fade (used for running agent chip dot)
-- `@keyframes typingBounce` — bounce dots (used for typing indicator)
+- `@keyframes auraRing` — expanding ring (globe aura)
+- `@keyframes gradientShift` — background sweep (globe sphere)
+- `@keyframes shimmer` — left-to-right shimmer (New Session button)
+- `@keyframes pulse` — opacity fade (running agent dot)
+- `@keyframes typingBounce` — bounce dots (typing indicator)
 - `@keyframes msgIn` — message entry slide-up
-- `@keyframes luxuryGlow` — slow ambient glow breathe (welcome/onboarding screens)
+- `@keyframes luxuryGlow` — ambient breathe (welcome/onboarding screens)
+- `@keyframes earthSpin` — continent scroll (WorldGlobe)
+- `@keyframes worldOrbit1/2` — orbital ring spin (WorldGlobe)
 
 ## Project Structure
 

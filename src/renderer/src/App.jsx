@@ -9,6 +9,7 @@ function uid() { return Math.random().toString(36).slice(2) }
 
 export default function App() {
   const [onboardingComplete, setOnboardingComplete] = useState(true) // Default to true to prevent flash
+  const [theme, setTheme] = useState(() => localStorage.getItem('no1team_theme') || 'dark')
   const [view, setView] = useState('home')
   const [sessions, setSessions] = useState([])
   const [activeSession, setActiveSession] = useState(null)
@@ -50,7 +51,7 @@ export default function App() {
   const [activeProviders, setActiveProviders] = useState(['claude', 'codex', 'gemini'])
   const [installStatus, setInstallStatus] = useState({})
   const [showAddProvider, setShowAddProvider] = useState(false)
-  const [currentAccent, setCurrentAccent] = useState('#4361EE')
+  const [currentAccent, setCurrentAccent] = useState('#F97316')
   const [fontSize, setFontSize] = useState('14px')
   const [density, setDensity] = useState('normal')
   const [profiles, setProfiles] = useState({})
@@ -72,6 +73,12 @@ export default function App() {
   const selectStyle = { padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-2)', background: 'var(--surface-3)', color: 'var(--text-1)', width: '100%', marginBottom: 16, font: '400 14px var(--font-body)', outline: 'none', cursor: 'pointer' };
   const ghostButtonStyle = { padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-2)', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', font: '400 12px var(--font-body)', transition: 'all 150ms' };
 
+
+  // Apply theme to document root
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('no1team_theme', theme)
+  }, [theme])
 
   // Check onboarding
   useEffect(() => {
@@ -390,8 +397,17 @@ export default function App() {
         </div>
 
         <div className="sidebar-bottom">
-          <div className="sidebar-link" onClick={() => { setView('settings'); loadSkillsList() }}>
-            <span>⚙️</span> Settings
+          <div className="sidebar-bottom-row">
+            <div className="sidebar-link" onClick={() => { setView('settings'); loadSkillsList() }}>
+              <span>⚙️</span> Settings
+            </div>
+            <button
+              className="theme-toggle-btn"
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? '☀' : '🌙'}
+            </button>
           </div>
         </div>
 
@@ -766,12 +782,12 @@ export default function App() {
                     <label className="form-label" style={{ marginTop: 16 }}>Accent Color</label>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
                       {[
-                        { color: '#4361EE', label: 'Indigo (Default)' },
+                        { color: '#F97316', label: 'Orange (Default)' },
+                        { color: '#FB923C', label: 'Amber' },
                         { color: '#4A90D9', label: 'Blue' },
-                        { color: '#E8742A', label: 'Orange' },
                         { color: '#4CAF50', label: 'Green' },
                         { color: '#FF6B9D', label: 'Pink' },
-                        { color: '#F5C842', label: 'Gold' },
+                        { color: '#A78BFA', label: 'Violet' },
                       ].map(opt => (
                         <button
                           key={opt.color}

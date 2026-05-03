@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 
 const AGENT_COLORS = {
-  claude:    '#F08040',
-  codex:     '#8B5CF6',
-  gemini:    '#38BDF8',
-  aider:     '#34D399',
+  claude:    '#FB923C',
+  codex:     '#A78BFA',
+  gemini:    '#60A5FA',
+  aider:     '#4ADE80',
   opencode:  '#F472B6',
 };
 
