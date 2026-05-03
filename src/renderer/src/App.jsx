@@ -390,14 +390,8 @@ export default function App() {
         </div>
 
         <div className="sidebar-bottom">
-          <div className="sidebar-link" onClick={() => { setView('brain'); loadBrainTree() }}>
-            <span>🧠</span> Brain Files
-          </div>
           <div className="sidebar-link" onClick={() => { setView('settings'); loadSkillsList() }}>
             <span>⚙️</span> Settings
-          </div>
-          <div className="sidebar-link" onClick={() => { setView('analytics'); loadAnalytics() }}>
-            <span>📊</span> Analytics
           </div>
         </div>
 
@@ -431,7 +425,7 @@ export default function App() {
       const sess = sessions.find(s => s.id === activeSession)
       if (sess) sessionName = sess.title
     }
-    const viewLabel = view === 'settings' ? '⚙️ Settings' : view === 'brain' ? '🧠 Brain Files' : view === 'analytics' ? '📊 Analytics' : ''
+    const viewLabel = view === 'settings' ? '⚙️ Settings' : ''
 
     return (
       <div className="titlebar">
@@ -525,67 +519,6 @@ export default function App() {
             <GeneralTab sessionId={activeSession} />
           )}
 
-          {/* BRAIN FILE BROWSER */}
-          {view === 'brain' && (
-            <div style={{ display: 'flex', height: '100%' }}>
-              <div style={{ width: '260px', borderRight: '1px solid var(--border-1)', background: 'var(--surface-0)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-                <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ font: '600 12px var(--font-display)', color: 'var(--text-2)' }}>Brain Files</span>
-                  <span style={{ font: '400 11px var(--font-body)', color: 'var(--text-3)' }}>🧠</span>
-                </div>
-                <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border-1)' }}>
-                  <input value={brainSearch} onChange={e => searchBrain(e.target.value)} placeholder="Search..."
-                    style={{ width: '100%', padding: '6px 10px', background: 'var(--surface-3)', border: '1px solid var(--border-2)', borderRadius: 'var(--radius-md)', color: 'var(--text-1)', fontSize: '12px', outline: 'none', fontFamily: 'var(--font-body)' }} />
-                </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
-                  {brainSearch && brainSearchResults.length > 0 ? (
-                    brainSearchResults.map(r => (
-                      <div key={r.path} onClick={() => openBrainFile(r.path)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-1)', transition: 'background 150ms' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        <div style={{ font: '500 12px var(--font-body)', color: 'var(--accent)' }}>{r.name}</div>
-                        <div style={{ font: '400 11px var(--font-body)', color: 'var(--text-3)', marginTop: 2 }}>{r.snippet}</div>
-                      </div>
-                    ))
-                  ) : (
-                    brainTree.length > 0
-                      ? brainTree.map(node => renderBrainTreeNode(node))
-                      : <div style={{ padding: '20px 16px', font: '400 12px var(--font-body)', color: 'var(--text-3)', textAlign: 'center' }}>Brain files load when Electron is running.</div>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--surface-1)' }}>
-                {brainFilePath ? (
-                  <>
-                    <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-2)', flexShrink: 0 }}>
-                      <span style={{ font: '400 12px var(--font-mono)', color: 'var(--text-3)' }}>{brainFilePath}</span>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        {brainEditing ? (
-                          <button onClick={saveBrainFile} className="btn-accent" style={{ height: 28, padding: '0 14px', fontSize: 12 }}>Save</button>
-                        ) : (
-                          <button onClick={() => setBrainEditing(true)} className="btn-secondary" style={{ height: 28, padding: '0 14px', fontSize: 12 }}>Edit</button>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }}>
-                      {brainEditing ? (
-                        <textarea value={brainFileContent} onChange={e => setBrainFileContent(e.target.value)}
-                          className="form-textarea" style={{ height: '100%', minHeight: 400 }} />
-                      ) : (
-                        <pre style={{ font: '400 13px/1.7 var(--font-mono)', color: 'var(--text-1)', whiteSpace: 'pre-wrap', margin: 0 }}>{brainFileContent}</pre>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                    <div style={{ font: '400 13px var(--font-body)', color: 'var(--text-3)' }}>Select a file to view its contents</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* SETTINGS VIEW */}
           {view === 'settings' && (
             <div className="settings-container">
@@ -595,15 +528,22 @@ export default function App() {
                 </div>
                 <div className={`settings-nav-item ${settingsTab === 'providers' ? 'active' : ''}`} onClick={() => setSettingsTab('providers')}>🤖 Providers</div>
                 <div className={`settings-nav-item ${settingsTab === 'proxy' ? 'active' : ''}`} onClick={() => setSettingsTab('proxy')}>🔌 Proxy</div>
-                <div className={`settings-nav-item ${settingsTab === 'brain' ? 'active' : ''}`} onClick={() => setSettingsTab('brain')}>🧠 Brain</div>
                 <div className={`settings-nav-item ${settingsTab === 'skills' ? 'active' : ''}`} onClick={() => setSettingsTab('skills')}>📋 Skills</div>
                 <div className={`settings-nav-item ${settingsTab === 'defaults' ? 'active' : ''}`} onClick={() => setSettingsTab('defaults')}>⚙️ Defaults</div>
                 <div className={`settings-nav-item ${settingsTab === 'notifs' ? 'active' : ''}`} onClick={() => setSettingsTab('notifs')}>🔔 Notifs</div>
                 <div className={`settings-nav-item ${settingsTab === 'appear' ? 'active' : ''}`} onClick={() => setSettingsTab('appear')}>🎨 Appearance</div>
                 <div className={`settings-nav-item ${settingsTab === 'export' ? 'active' : ''}`} onClick={() => setSettingsTab('export')}>📤 Export</div>
+
+                <div style={{ margin: '8px 10px', height: 1, background: 'var(--border-1)' }} />
+                <div style={{ padding: '6px 16px 4px', font: '600 10px var(--font-body)', color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Data</div>
+                <div className={`settings-nav-item ${settingsTab === 'brain-files' ? 'active' : ''}`}
+                  onClick={() => { setSettingsTab('brain-files'); loadBrainTree() }}>🧠 Brain Files</div>
+                <div className={`settings-nav-item ${settingsTab === 'analytics' ? 'active' : ''}`}
+                  onClick={() => { setSettingsTab('analytics'); loadAnalytics() }}>📊 Analytics</div>
               </div>
 
-              <div className="settings-content">
+              <div className="settings-content"
+                style={settingsTab === 'brain-files' ? { padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' } : {}}>
                 {settingsTab === 'skills' && (
                   <div>
                     <h2 className="settings-title">Agent Task Skills</h2>
@@ -677,15 +617,68 @@ export default function App() {
                   </div>
                 )}
 
-                {settingsTab === 'brain' && (
-                  <div>
-                    <h2 className="settings-title">Brain Memory Storage</h2>
-                    <p className="settings-desc">Your sessions, knowledge, and memory are stored locally in Markdown.</p>
-                    <div style={{ padding: '16px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-secondary)' }}>Path: <code>~/no1team/brain/</code></p>
-                      <button className="btn-secondary" onClick={() => window.teamAPI?.openWorkspaceInExplorer?.('~/no1team/brain')}>
-                        Open Folder in Explorer
-                      </button>
+                {settingsTab === 'brain-files' && (
+                  <div style={{ display: 'flex', flex: 1, height: '100%', overflow: 'hidden' }}>
+                    {/* File tree panel */}
+                    <div style={{ width: 240, flexShrink: 0, borderRight: '1px solid var(--border-1)', display: 'flex', flexDirection: 'column', background: 'var(--surface-0)' }}>
+                      <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--border-1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ font: '600 12px var(--font-display)', color: 'var(--text-1)' }}>Brain Files</span>
+                        <button onClick={() => window.teamAPI?.openWorkspaceInExplorer?.('~/no1team/brain')}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontSize: 12, padding: '2px 6px', borderRadius: 4 }}
+                          title="Open folder">↗</button>
+                      </div>
+                      <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border-1)' }}>
+                        <input value={brainSearch} onChange={e => searchBrain(e.target.value)}
+                          placeholder="Search files…"
+                          style={{ width: '100%', padding: '6px 10px', background: 'var(--surface-3)', border: '1px solid var(--border-2)', borderRadius: 'var(--radius-md)', color: 'var(--text-1)', fontSize: 12, outline: 'none', fontFamily: 'var(--font-body)' }} />
+                      </div>
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+                        {brainSearch && brainSearchResults.length > 0
+                          ? brainSearchResults.map(r => (
+                            <div key={r.path} onClick={() => openBrainFile(r.path)}
+                              style={{ padding: '8px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border-1)' }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                              <div style={{ font: '500 12px var(--font-body)', color: 'var(--accent)' }}>{r.name}</div>
+                              <div style={{ font: '400 11px var(--font-body)', color: 'var(--text-3)', marginTop: 2 }}>{r.snippet}</div>
+                            </div>
+                          ))
+                          : brainTree.length > 0
+                            ? brainTree.map(node => renderBrainTreeNode(node))
+                            : (
+                              <div style={{ padding: '24px 16px', font: '400 12px var(--font-body)', color: 'var(--text-3)', textAlign: 'center', lineHeight: 1.7 }}>
+                                Brain files appear here<br />when Electron is running.
+                              </div>
+                            )
+                        }
+                      </div>
+                    </div>
+
+                    {/* File content panel */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--surface-1)', overflow: 'hidden' }}>
+                      {brainFilePath ? (
+                        <>
+                          <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(7,7,13,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
+                            <span style={{ font: '400 12px var(--font-mono)', color: 'var(--text-3)' }}>{brainFilePath}</span>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              {brainEditing
+                                ? <button onClick={saveBrainFile} className="btn-accent" style={{ height: 28, padding: '0 14px', fontSize: 12 }}>Save</button>
+                                : <button onClick={() => setBrainEditing(true)} className="btn-secondary" style={{ height: 28, padding: '0 14px', fontSize: 12 }}>Edit</button>
+                              }
+                            </div>
+                          </div>
+                          <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }}>
+                            {brainEditing
+                              ? <textarea value={brainFileContent} onChange={e => setBrainFileContent(e.target.value)} className="form-textarea" style={{ height: '100%', minHeight: 400 }} />
+                              : <pre style={{ font: '400 13px/1.75 var(--font-mono)', color: 'var(--text-1)', whiteSpace: 'pre-wrap', margin: 0 }}>{brainFileContent}</pre>
+                            }
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                          <div style={{ font: '400 13px var(--font-body)', color: 'var(--text-3)' }}>Select a file to view its contents</div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -943,109 +936,103 @@ export default function App() {
                     </button>
                   </div>
                 )}
-              </div>
-            </div>
-          )}
 
-          {/* ANALYTICS VIEW */}
-          {view === 'analytics' && (
-            <div className="analytics-container" style={{ padding: '32px 36px', overflow: 'auto', flexDirection: 'column', display: 'flex' }}>
-              <div style={{ marginBottom: 28 }}>
-                <h2 style={{ margin: 0, font: '600 17px var(--font-display)', color: 'var(--text-1)' }}>Analytics Dashboard</h2>
-                <p style={{ margin: '4px 0 0', font: '400 13px var(--font-body)', color: 'var(--text-2)' }}>Usage stats and session history</p>
-              </div>
+                {settingsTab === 'analytics' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                    <div style={{ marginBottom: 28 }}>
+                      <h2 className="settings-title">Analytics</h2>
+                      <p className="settings-desc">Usage stats and session history</p>
+                    </div>
 
-              {analyticsLoading && <div style={{ color: 'var(--text-secondary)', padding: 32, textAlign: 'center' }}>Loading analytics...</div>}
+                    {analyticsLoading && <div style={{ color: 'var(--text-3)', padding: '32px 0', textAlign: 'center' }}>Loading analytics…</div>}
 
-              {!analyticsLoading && analyticsData && (
-                <>
-                  {/* Overview Cards */}
-                  <div className="analytics-grid">
-                    <div className="stat-card">
-                      <div className="stat-value">{analyticsData.overview.totalSessions}</div>
-                      <div className="stat-label">Total Sessions</div>
-                    </div>
-                    <div className="stat-card">
-                      <div className="stat-value">{analyticsData.overview.approved}</div>
-                      <div className="stat-label">Approved</div>
-                    </div>
-                    <div className="stat-card">
-                      <div className="stat-value">{analyticsData.overview.approvalRate}%</div>
-                      <div className="stat-label">Approval Rate</div>
-                      <div className="progress-bar-container">
-                        <div className="progress-bar-fill" style={{ width: `${analyticsData.overview.approvalRate}%`, background: 'var(--status-approved)' }} />
-                      </div>
-                    </div>
-                    <div className="stat-card">
-                      <div className="stat-value">{analyticsData.overview.sentBack}</div>
-                      <div className="stat-label">Sent Back</div>
-                    </div>
-                  </div>
-
-                  {/* Task Breakdown */}
-                  {Object.keys(analyticsData.taskBreakdown).length > 0 && (
-                    <div style={{ marginTop: 24 }}>
-                      <h3 style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)', marginBottom: 12 }}>Task Type Breakdown</h3>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {Object.entries(analyticsData.taskBreakdown).map(([type, count]) => (
-                          <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <span style={{ color: 'var(--text-secondary)', fontSize: 13, fontFamily: 'var(--font-body)', minWidth: 80 }}>{type}</span>
-                            <div className="progress-bar-container" style={{ flex: 1 }}>
-                              <div className="progress-bar-fill" style={{ width: `${Math.min(100, (count / analyticsData.overview.totalSessions) * 100)}%`, background: 'var(--accent)' }} />
-                            </div>
-                            <span style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, minWidth: 20 }}>{count}</span>
+                    {!analyticsLoading && analyticsData && (
+                      <>
+                        <div className="analytics-grid">
+                          <div className="stat-card">
+                            <div className="stat-value">{analyticsData.overview.totalSessions}</div>
+                            <div className="stat-label">Total Sessions</div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Agent Performance */}
-                  {Object.keys(analyticsData.agentStats).length > 0 && (
-                    <div style={{ marginTop: 24 }}>
-                      <h3 style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)', marginBottom: 12 }}>Agent Performance</h3>
-                      <div className="analytics-grid">
-                        {Object.entries(analyticsData.agentStats).map(([id, stats]) => (
-                          <div key={id} className="stat-card">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ width: 10, height: 10, borderRadius: '50%', background: stats.color, display: 'inline-block' }} />
-                              <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 14 }}>{stats.name}</span>
-                            </div>
-                            <div className="stat-label">{stats.total} tasks · {stats.approvalRate}% approved</div>
+                          <div className="stat-card">
+                            <div className="stat-value">{analyticsData.overview.approved}</div>
+                            <div className="stat-label">Approved</div>
+                          </div>
+                          <div className="stat-card">
+                            <div className="stat-value">{analyticsData.overview.approvalRate}%</div>
+                            <div className="stat-label">Approval Rate</div>
                             <div className="progress-bar-container">
-                              <div className="progress-bar-fill" style={{ width: `${stats.approvalRate}%`, background: stats.color }} />
+                              <div className="progress-bar-fill" style={{ width: `${analyticsData.overview.approvalRate}%`, background: 'var(--status-approved)' }} />
                             </div>
-                            <div className="stat-label">Avg send-backs: {stats.avgSendBacks}</div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Recent Sessions */}
-                  {analyticsData.recentSessions?.length > 0 && (
-                    <div style={{ marginTop: 24 }}>
-                      <h3 style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)', marginBottom: 12 }}>Recent Sessions</h3>
-                      {analyticsData.recentSessions.map((s, i) => (
-                        <div key={i} style={{ padding: '8px 12px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{s.name || s.id}</span>
-                          <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{s.taskType} · {s.date}</span>
+                          <div className="stat-card">
+                            <div className="stat-value">{analyticsData.overview.sentBack}</div>
+                            <div className="stat-label">Sent Back</div>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
 
-                  {/* Empty state if no data */}
-                  {analyticsData.overview.totalSessions === 0 && (
-                    <div className="empty-state" style={{ marginTop: 48 }}>
-                      <span className="empty-state-icon">📊</span>
-                      <span className="empty-state-text">No analytics data yet. Complete a task session to see stats here.</span>
-                    </div>
-                  )}
-                </>
-              )}
+                        {Object.keys(analyticsData.taskBreakdown).length > 0 && (
+                          <div style={{ marginTop: 24 }}>
+                            <h3 style={{ font: '600 13px var(--font-display)', color: 'var(--text-2)', marginBottom: 12 }}>Task Type Breakdown</h3>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {Object.entries(analyticsData.taskBreakdown).map(([type, count]) => (
+                                <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                  <span style={{ font: '400 13px var(--font-body)', color: 'var(--text-3)', minWidth: 80 }}>{type}</span>
+                                  <div className="progress-bar-container" style={{ flex: 1 }}>
+                                    <div className="progress-bar-fill" style={{ width: `${Math.min(100, (count / analyticsData.overview.totalSessions) * 100)}%`, background: 'var(--accent)' }} />
+                                  </div>
+                                  <span style={{ font: '600 13px var(--font-body)', color: 'var(--text-1)', minWidth: 20 }}>{count}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {Object.keys(analyticsData.agentStats).length > 0 && (
+                          <div style={{ marginTop: 24 }}>
+                            <h3 style={{ font: '600 13px var(--font-display)', color: 'var(--text-2)', marginBottom: 12 }}>Agent Performance</h3>
+                            <div className="analytics-grid">
+                              {Object.entries(analyticsData.agentStats).map(([id, stats]) => (
+                                <div key={id} className="stat-card">
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: stats.color, display: 'inline-block' }} />
+                                    <span style={{ font: '600 13px var(--font-body)', color: 'var(--text-1)' }}>{stats.name}</span>
+                                  </div>
+                                  <div className="stat-label">{stats.total} tasks · {stats.approvalRate}% approved</div>
+                                  <div className="progress-bar-container">
+                                    <div className="progress-bar-fill" style={{ width: `${stats.approvalRate}%`, background: stats.color }} />
+                                  </div>
+                                  <div className="stat-label">Avg send-backs: {stats.avgSendBacks}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {analyticsData.recentSessions?.length > 0 && (
+                          <div style={{ marginTop: 24 }}>
+                            <h3 style={{ font: '600 13px var(--font-display)', color: 'var(--text-2)', marginBottom: 12 }}>Recent Sessions</h3>
+                            {analyticsData.recentSessions.map((s, i) => (
+                              <div key={i} style={{ padding: '8px 12px', background: 'var(--surface-3)', border: '1px solid var(--border-1)', borderRadius: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ font: '500 13px var(--font-body)', color: 'var(--text-1)' }}>{s.name || s.id}</span>
+                                <span style={{ font: '400 11px var(--font-body)', color: 'var(--text-3)' }}>{s.taskType} · {s.date}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {analyticsData.overview.totalSessions === 0 && (
+                          <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--text-3)', font: '400 13px var(--font-body)' }}>
+                            No data yet — complete a session to see stats here.
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
+
 
         </div>
       </div>
