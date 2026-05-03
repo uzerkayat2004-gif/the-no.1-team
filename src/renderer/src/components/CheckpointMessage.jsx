@@ -1,7 +1,7 @@
 import React from 'react'
 
 export default function CheckpointMessage({ checkpoint, sessionId, onAction }) {
-  const { type, message, description, buttons } = checkpoint
+  const { message, description, buttons } = checkpoint
 
   const handleButton = (buttonLabel) => {
     const lower = buttonLabel.toLowerCase()
@@ -9,7 +9,7 @@ export default function CheckpointMessage({ checkpoint, sessionId, onAction }) {
     if (lower.includes('send back') || lower.includes('revise') || lower.includes('retry') || lower.includes('fix') || lower.includes('try again'))
       action = 'sendback'
     else if (lower.includes('cancel')) action = 'cancelled'
-    else if (lower.includes('review code') || lower.includes('review')) action = 'review'
+    else if (lower.includes('review')) action = 'review'
     else if (lower.includes('skip')) action = 'skip'
 
     if (action === 'sendback') {
@@ -32,7 +32,7 @@ export default function CheckpointMessage({ checkpoint, sessionId, onAction }) {
       <div className="checkpoint-buttons">
         {(buttons || []).map((btnLabel, i) => {
           const isDanger  = btnLabel.toLowerCase().includes('cancel')
-          const isPrimary = btnLabel.toLowerCase().includes('approve') || btnLabel.toLowerCase().includes('start')
+          const isPrimary = btnLabel.toLowerCase().includes('approve') || btnLabel.toLowerCase().includes('start') || btnLabel.toLowerCase().includes('continue')
           return (
             <button key={i} onClick={() => handleButton(btnLabel)}
               className={`checkpoint-btn ${isPrimary ? 'primary' : isDanger ? 'danger' : 'secondary'}`}>

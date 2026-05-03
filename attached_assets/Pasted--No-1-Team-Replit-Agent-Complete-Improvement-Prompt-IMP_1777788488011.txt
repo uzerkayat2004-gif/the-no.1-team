@@ -1,0 +1,1020 @@
+# No. 1 Team — Replit Agent Complete Improvement Prompt
+
+## IMPORTANT CONTEXT — READ THIS FIRST
+
+This is an existing Electron desktop app (React + Vite + Node.js). The code is already written and partially working. Your job is NOT to rebuild from scratch. Your job is to:
+1. Improve the UI to be world-class premium quality
+2. Fix all broken agent behavior and communication logic
+3. Audit and improve every system in the app
+
+The app coordinates multiple AI CLI tools (Claude Code, Codex, Gemini CLI, Aider, OpenCode) as a team. The Boss types tasks, agents work in parallel, results appear in one unified interface.
+
+**Tech stack:**
+- Electron (desktop shell)
+- React + Vite (frontend renderer)
+- Node.js (main process)
+- IPC communication between main and renderer
+- File-based Brain memory at `~/no1team/brain/`
+
+---
+
+# PART 1 — UI REDESIGN (Make It World-Class)
+
+## The Goal
+Transform this app to look and feel like it was built by a top-tier design team. Think Linear, Vercel Dashboard, Raycast, Arc Browser. Every pixel should feel intentional. Premium, dark, precise, and powerful.
+
+## Design Philosophy
+- **Restraint** — every element earns its place
+- **Depth** — subtle layering creates hierarchy
+- **Precision** — 4px spacing grid, consistent everything
+- **Identity** — distinct personality, not generic dark mode
+- **Speed** — 150ms transitions, nothing feels sluggish
+
+## Complete Color System
+
+Replace ALL existing colors with these CSS variables:
+
+```css
+:root {
+  /* Surfaces — 5 depth levels */
+  --surface-0: #060608;
+  --surface-1: #0C0C12;
+  --surface-2: #111118;
+  --surface-3: #18181F;
+  --surface-4: #1F1F2A;
+
+  /* Primary accent — deep intelligent purple */
+  --accent:        #7C6EFA;
+  --accent-hover:  #9B8FFB;
+  --accent-dim:    #2A2550;
+  --accent-border: #3D3680;
+  --accent-glow:   rgba(124, 110, 250, 0.15);
+
+  /* Agent identity colors */
+  --agent-claude:   #F07830;
+  --agent-codex:    #9B9BA8;
+  --agent-gemini:   #5B9CF6;
+  --agent-aider:    #52C97A;
+  --agent-opencode: #F472B6;
+  --agent-boss:     #EAB308;
+  --agent-system:   #7C6EFA;
+
+  /* Status */
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --error:   #EF4444;
+
+  /* Text hierarchy */
+  --text-1: #F0F0F8;
+  --text-2: #A0A0BC;
+  --text-3: #58586E;
+  --text-4: #2E2E3E;
+
+  /* Borders */
+  --border-1: #1A1A24;
+  --border-2: #222230;
+  --border-3: #2C2C3E;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.5);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.6);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.7);
+  --shadow-accent: 0 0 0 1px var(--accent-border), 0 4px 20px rgba(124,110,250,0.2);
+
+  /* Typography */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body:    'Inter', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+}
+```
+
+Import from Google Fonts:
+```
+https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap
+```
+
+## Title Bar
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  ● No. 1 Team  ›  💬 Session 7     🟠 Claude Code ⬜ Codex 🔵 Gemini │
+│                                              [Research Panel]  [─][□][✕]│
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+- Height: 42px
+- Background: var(--surface-0)
+- Bottom border: 1px solid var(--border-1)
+- Left: colored dot (var(--accent), 8px) + "No. 1 Team" (Space Grotesk 13px var(--text-2)) + › separator + session name (var(--text-1) 13px weight 500)
+- Middle: agent selector chips (existing functionality, redesigned visually)
+- Right: Research Panel text button + window controls
+- Fully draggable (-webkit-app-region: drag)
+
+## Sidebar
+
+```
+Width: 248px
+Background: var(--surface-0)
+Right border: 1px solid var(--border-1)
+```
+
+**New Session button:**
+```css
+margin: 12px;
+width: calc(100% - 24px);
+height: 36px;
+background: linear-gradient(135deg, var(--accent-dim), rgba(124,110,250,0.08));
+border: 1px solid var(--accent-border);
+border-radius: var(--radius-md);
+color: var(--accent);
+font: 500 13px var(--font-body);
+cursor: pointer;
+transition: all 150ms ease;
+```
+
+**Session group headers:**
+```css
+font: 600 10px var(--font-body);
+color: var(--text-3);
+letter-spacing: 0.1em;
+text-transform: uppercase;
+padding: 16px 16px 6px;
+```
+
+**Session cards:**
+```css
+padding: 10px 13px;
+margin: 1px 6px;
+border-radius: var(--radius-md);
+background: transparent;
+cursor: pointer;
+transition: background 150ms;
+```
+- Hover: background var(--surface-3)
+- Active: background var(--surface-3), left border 2px solid var(--accent)
+- Line 1: task icon + name (13px var(--text-1) weight 500, truncate)
+- Line 2: status + date (11px var(--text-3))
+
+**Bottom nav:**
+```css
+border-top: 1px solid var(--border-1);
+padding: 8px 6px;
+```
+Each item: 36px height, 13px Inter var(--text-2), hover → var(--text-1) + var(--surface-3) background
+
+## Chat Area
+
+Background: var(--surface-1)
+
+**Message design — NO BUBBLE BACKGROUNDS for agent messages:**
+
+```
+🟠 Claude Code ⭐                                    2:34 PM
+─────────────────────────────────────────────────────
+Here is my research finding. The transformer architecture...
+```
+
+```css
+/* Agent message container */
+.message-agent {
+  padding: 14px 20px 14px 18px;
+  margin-bottom: 2px;
+  border-left: 2px solid; /* agent color at 70% opacity */
+  animation: msgIn 200ms ease forwards;
+}
+
+/* Agent header */
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+
+.agent-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.agent-name {
+  font: 600 12px var(--font-display);
+  color: /* agent color */;
+}
+
+.senior-star {
+  font-size: 11px;
+  color: #EAB308;
+}
+
+.message-timestamp {
+  margin-left: auto;
+  font: 400 11px var(--font-body);
+  color: var(--text-3);
+}
+
+/* Message content */
+.message-content {
+  font: 400 14px/1.75 var(--font-body);
+  color: var(--text-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+```
+
+**Boss messages:**
+```css
+background: var(--surface-2);
+border: 1px solid var(--border-2);
+border-radius: var(--radius-md);
+padding: 12px 16px;
+margin: 8px 0;
+```
+Gold dot + "You" label in var(--agent-boss).
+
+**Code blocks inside messages:**
+```css
+background: var(--surface-3);
+border: 1px solid var(--border-2);
+border-radius: var(--radius-md);
+padding: 14px 18px;
+font: 400 13px var(--font-mono);
+color: var(--text-1);
+overflow-x: auto;
+margin: 8px 0;
+```
+
+**Round headers:**
+```
+─────────────────  Round 1 — Positions  ─────────────────
+```
+```css
+text-align: center;
+font: 600 10px var(--font-body);
+color: var(--text-3);
+letter-spacing: 0.1em;
+text-transform: uppercase;
+margin: 20px 0;
+display: flex;
+align-items: center;
+gap: 12px;
+/* lines: flex: 1; height: 1px; background: var(--border-1) */
+```
+
+**Checkpoint banners:**
+```css
+background: var(--surface-2);
+border: 1px solid var(--accent-border);
+border-left: 3px solid var(--accent);
+border-radius: var(--radius-lg);
+padding: 16px 20px;
+margin: 16px 0;
+animation: checkpointIn 250ms ease forwards;
+```
+
+**System messages:**
+```css
+text-align: center;
+font: 400 11px var(--font-body);
+color: var(--text-3);
+margin: 8px 0;
+```
+
+**Mode badge (sticky in chat, NOT title bar):**
+```css
+position: sticky;
+top: 10px;
+float: right;
+padding: 3px 10px;
+border-radius: var(--radius-full);
+font: 600 10px var(--font-body);
+letter-spacing: 0.08em;
+text-transform: uppercase;
+pointer-events: none;
+z-index: 10;
+/* AUTO: bg var(--accent-dim), border var(--accent-border), color var(--accent) */
+/* MANUAL: bg rgba(245,158,11,0.1), border rgba(245,158,11,0.3), color #F59E0B */
+```
+
+**Typing/loading indicator:**
+```css
+display: flex;
+align-items: center;
+gap: 8px;
+padding: 10px 18px;
+color: /* agent color */;
+font: 400 12px var(--font-body);
+/* animated dot: pulse animation */
+```
+
+## Messaging Bar
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                                                              │
+│  [@▼]  Type a message or / for commands...        [Send →]  │
+│                                                              │
+│  [🔬 Deep Research ×]                                       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Outer container:**
+```css
+background: var(--surface-1);
+border-top: 1px solid var(--border-2);
+padding: 10px 14px 12px;
+```
+
+**Inner input wrapper:**
+```css
+display: flex;
+align-items: center;
+background: var(--surface-3);
+border: 1px solid var(--border-3);
+border-radius: var(--radius-lg);
+min-height: 44px;
+transition: border-color 150ms, box-shadow 150ms;
+/* Focus-within: border var(--accent), box-shadow var(--shadow-accent) */
+```
+
+**[@▼] tag button:**
+```css
+width: 32px;
+height: 32px;
+margin: 6px 0 6px 8px;
+background: var(--surface-4);
+border: 1px solid var(--border-3);
+border-radius: var(--radius-sm);
+color: var(--text-2);
+font: 400 13px var(--font-body);
+```
+
+**Input field:**
+```css
+flex: 1;
+background: transparent;
+border: none;
+outline: none;
+padding: 0 12px;
+font: 400 14px var(--font-body);
+color: var(--text-1);
+/* placeholder: var(--text-3) */
+```
+
+**Send button:**
+```css
+height: 32px;
+padding: 0 16px;
+margin: 6px 6px 6px 0;
+background: var(--accent);
+border: none;
+border-radius: var(--radius-md);
+color: white;
+font: 500 13px var(--font-body);
+cursor: pointer;
+transition: all 150ms;
+/* hover: var(--accent-hover) */
+/* active: scale(0.97) */
+/* disabled: var(--accent-dim) */
+```
+
+**Task type tag:**
+```css
+display: inline-flex;
+align-items: center;
+gap: 6px;
+margin-top: 6px;
+padding: 3px 8px 3px 10px;
+background: var(--accent-dim);
+border: 1px solid var(--accent-border);
+border-radius: var(--radius-full);
+font: 400 12px var(--font-body);
+color: var(--accent);
+```
+
+## Slash Command Menu
+
+```css
+position: absolute;
+bottom: calc(100% + 8px);
+left: 0;
+background: var(--surface-4);
+border: 1px solid var(--border-3);
+border-radius: var(--radius-lg);
+padding: 6px;
+width: 300px;
+max-height: 380px;
+overflow-y: auto;
+box-shadow: var(--shadow-lg);
+animation: menuUp 150ms ease forwards;
+```
+
+Section headers: 10px var(--text-3) uppercase letter-spacing 0.1em, padding 8px 10px 4px
+
+Each item:
+```css
+display: flex;
+align-items: center;
+gap: 10px;
+height: 36px;
+padding: 0 10px;
+border-radius: var(--radius-md);
+cursor: pointer;
+/* icon: 14px fixed width 24px */
+/* command: JetBrains Mono 12px var(--accent) */
+/* description: Inter 12px var(--text-2) */
+/* hover: background var(--surface-3) */
+```
+
+## Research Panel
+
+Full-screen overlay:
+```css
+position: fixed;
+inset: 0;
+background: var(--surface-1);
+z-index: 500;
+display: flex;
+flex-direction: column;
+```
+
+Header: 52px, var(--surface-0), border-bottom var(--border-2)
+Tab bar: var(--surface-0), border-bottom var(--border-2)
+
+Active tab:
+```css
+border-bottom: 2px solid /* agent color */;
+color: /* agent color */;
+font-weight: 500;
+```
+
+Content area:
+```css
+padding: 32px 40px;
+max-width: 880px;
+margin: 0 auto;
+width: 100%;
+font: 400 14px/1.85 var(--font-body);
+color: var(--text-1);
+```
+
+**Research status badges:**
+```css
+/* READY */
+background: rgba(34,197,94,0.1);
+border: 1px solid rgba(34,197,94,0.3);
+color: #22C55E;
+
+/* NO WEB */
+background: rgba(245,158,11,0.1);
+border: 1px solid rgba(245,158,11,0.3);
+color: #F59E0B;
+
+/* FAILED */
+background: rgba(239,68,68,0.1);
+border: 1px solid rgba(239,68,68,0.3);
+color: #EF4444;
+```
+
+## Settings Page
+
+Two-column layout:
+- Left nav: 170px, var(--surface-0), border-right var(--border-1)
+- Content: flex 1, var(--surface-1), padding 32px 36px
+
+Nav items:
+```css
+height: 34px;
+padding: 0 14px;
+border-radius: var(--radius-md);
+margin: 2px 6px;
+font: 400 13px var(--font-body);
+color: var(--text-2);
+/* active: color var(--accent), background var(--accent-dim) */
+/* hover: color var(--text-1), background var(--surface-3) */
+```
+
+Section title: Space Grotesk 17px var(--text-1) weight 600
+Section subtitle: Inter 13px var(--text-2) margin-bottom 24px
+Labels: 11px var(--text-2) weight 500 uppercase letter-spacing 0.06em
+
+Form inputs:
+```css
+background: var(--surface-3);
+border: 1px solid var(--border-2);
+border-radius: var(--radius-md);
+padding: 9px 12px;
+font: 400 14px var(--font-body);
+color: var(--text-1);
+/* focus: border var(--accent), box-shadow var(--shadow-accent) */
+```
+
+## Analytics Page
+
+Stat cards:
+```css
+background: var(--surface-2);
+border: 1px solid var(--border-2);
+border-radius: var(--radius-lg);
+padding: 22px 26px;
+```
+Number: Space Grotesk 38px var(--text-1) weight 700
+Label: Inter 11px var(--text-3) uppercase letter-spacing 0.08em
+
+Progress bars:
+```css
+height: 5px;
+background: var(--surface-3);
+border-radius: var(--radius-full);
+/* fill: agent color, border-radius same */
+```
+
+## Global Animations
+
+```css
+/* Message appear */
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Checkpoint appear */
+@keyframes checkpointIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Slash menu appear */
+@keyframes menuUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Toast appear */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Agent typing pulse */
+@keyframes pulse {
+  0%, 100% { opacity: 0.2; }
+  50%       { opacity: 1; }
+}
+
+/* Base transition — apply everywhere */
+button, a, [role="button"] {
+  transition: background 150ms ease, color 150ms ease,
+              border-color 150ms ease, box-shadow 150ms ease,
+              transform 100ms ease, filter 150ms ease;
+}
+```
+
+## Custom Scrollbar
+
+```css
+* { scrollbar-width: thin; scrollbar-color: var(--border-3) transparent; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-3); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+```
+
+## Empty State
+
+```
+center of chat:
+
+   ● (animated gradient circle 48px, purple to orange)
+
+   No. 1 Team
+
+   Select an agent and type / to begin
+
+   [ + New Session ]
+```
+
+## Use Your Own Judgment On UI
+
+You have creative freedom here. If you see any UI element that could be better — make it better. The goal is premium. If something looks amateur — fix it. If something could be more intuitive — change it. Trust your design judgment.
+
+---
+
+# PART 2 — AGENT BEHAVIOR & LOGIC FIXES
+
+## The Core Problem
+
+When Boss sends a task, agents sometimes do not reply, give wrong responses, or the pipeline behaves incorrectly. Here is how everything is SUPPOSED to work and what needs to be fixed.
+
+## How Agents Are Spawned (Must Be Exactly Like This)
+
+```javascript
+// Each agent spawned as subprocess
+const proc = spawn(command, args, {
+  cwd:   workDir,
+  env:   buildEnv(agentId, executionMode), // conditional proxy injection
+  stdio: ['ignore', 'pipe', 'pipe'],
+  shell: true,
+});
+```
+
+**Claude Code args:** `['-p', task, '--output-format', 'stream-json', '--verbose']`
+**Codex args:** `['exec', task, '--model', model]`
+**Gemini args:** `['-p', task]` (no --output-format, uses plain text output)
+
+## Fix: Empty Task Topic Validation
+
+When Boss types `/quick` with no topic, do NOT spawn agents. Instead show:
+```
+⚡ Quick Research selected.
+What would you like to research? Type your topic and press Send.
+```
+
+Implementation:
+```javascript
+const cleanTask = message.replace(/^\/\w+\s*/, '').trim();
+if (fromSlash && cleanTask.length === 0 && taskType.id !== 'brainstorm') {
+  // Show prompt asking for topic
+  // Store pendingTaskType
+  // Return without spawning
+  return;
+}
+```
+
+## Fix: Proxy Injection Must Be Conditional
+
+**Native CLI mode** (user's real installed CLI):
+```javascript
+// Do NOT inject any proxy vars
+// Return just process.env
+return { ...process.env };
+```
+
+**Proxy mode**:
+```javascript
+// Inject proxy env vars
+return {
+  ...process.env,
+  ANTHROPIC_BASE_URL: proxySettings.claudeBaseUrl,
+  ANTHROPIC_API_KEY:  proxySettings.apiKey,
+  // etc per provider
+};
+```
+
+**Gemini CLI always native** — NEVER inject proxy vars for Gemini. Ever.
+
+## Fix: Output Parsing Per Provider
+
+**Claude Code (stream-json):**
+```javascript
+// Each stdout line is a JSON object
+const parsed = JSON.parse(line);
+if (parsed.type === 'assistant' && parsed.message?.content) {
+  parsed.message.content.forEach(block => {
+    if (block.type === 'text') content = block.text;
+  });
+} else if (parsed.type === 'result') {
+  content = parsed.result;
+} else if (parsed.type === 'system') {
+  return; // skip, don't display
+}
+```
+
+**Codex (JSON):**
+```javascript
+const parsed = JSON.parse(line);
+content = parsed.output || parsed.message || parsed.text || line;
+```
+
+**Gemini CLI (plain text):**
+```javascript
+// Do NOT try to JSON.parse Gemini output
+// It outputs plain text when using native subscription
+content = line.trim();
+```
+
+**Aider/OpenCode (plain text):**
+```javascript
+content = line.trim();
+```
+
+## Fix: Gemini Warnings Must Never Show As Errors
+
+These are warnings NOT errors. Filter them BEFORE emitting to UI:
+```javascript
+const FILTER_THESE = [
+  '256-color support not detected',
+  'Ripgrep is not available',
+  'Falling back to GrepTool',
+  'Both GOOGLE_API_KEY and GEMINI_API_KEY are set',
+  'Using GOOGLE_API_KEY',
+  'Warning:',
+  'INFO:',
+  'DEBUG:',
+];
+
+const isWarning = FILTER_THESE.some(w => text.includes(w));
+if (isWarning) {
+  console.log('[filtered warning]:', text.slice(0, 80));
+  return; // never emit as error
+}
+```
+
+## Fix: Credential Errors Must Give Helpful Message
+
+```javascript
+if (text.includes('No active credentials') || 
+    text.includes('404') || 
+    text.includes('unauthorized')) {
+  const provider = text.match(/provider:\s*(\w+)/i)?.[1] || 'unknown';
+  emit('agent-error', {
+    error: `No credentials for "${provider}" in your proxy. Use /model to switch to a working model, or configure this provider in your proxy settings.`
+  });
+  return;
+}
+```
+
+## Fix: Pipeline Must Continue If One Agent Fails
+
+If Claude Code fails, Codex and Gemini continue. Never stop the whole pipeline because one agent had an error. Collect results from agents that succeeded and proceed with those.
+
+```javascript
+// In _runAllAgentsCapture:
+const promises = pipeline.agents.map(agentId =>
+  this._runAgentCapture(pipeline, agentId, prompt)
+    .catch(err => ({
+      agentId,
+      agentName: profiles[agentId]?.name || agentId,
+      content: `[${agentId} failed: ${err.message}]`,
+      failed: true,
+    }))
+);
+return Promise.all(promises);
+```
+
+## Fix: Research Goes To Research Panel NOT Main Chat
+
+When agents complete research:
+1. Emit `pipeline-research-ready` with research data → stored in state → shown in Research Panel
+2. Show ONLY a notification in main chat:
+```jsx
+<div className="research-notification">
+  <span>🔬 Research Complete</span>
+  <p>{count} agents submitted research to the Research Panel.</p>
+  <button onClick={() => setShowResearch(true)}>View Research →</button>
+</div>
+```
+
+The full research content must NEVER appear as a regular chat message.
+
+## Fix: SessionId Filter Must Not Block Messages
+
+This is the most common cause of agents not appearing in chat:
+
+```javascript
+// WRONG - blocks everything if sessionId mismatch:
+if (data.sessionId !== currentSessionId) return;
+
+// RIGHT - check but log if mismatch:
+if (data.sessionId !== currentSessionId) {
+  console.log('[session mismatch]', data.sessionId, '!=', currentSessionId);
+  return;
+}
+```
+
+Make sure `currentSessionId` is set BEFORE the pipeline starts, not after.
+
+## Fix: Skill Briefing Must Tell Agents To Use Their Powers
+
+Every agent spawn must include this in the briefing based on agent type:
+
+**Claude Code:**
+```
+USE YOUR NATIVE ABILITIES:
+- Web search tool: use it for every research task
+- Bash execution: run commands, test code
+- File system: read and write files directly  
+- Multi-file editing: edit multiple files at once
+- Code execution: run and test before submitting
+Do not say "you would need to run X" — just run it.
+```
+
+**Codex:**
+```
+USE YOUR NATIVE ABILITIES:
+- Write complete production code, no placeholders
+- Execute and test everything you write
+- Write tests and run them
+- Fix failures before submitting
+```
+
+**Gemini CLI:**
+```
+USE YOUR NATIVE ABILITIES:
+- Massive context window: read entire codebases
+- Web search: always cite URLs for every claim
+- Deep research: go further than others would
+Use your context window aggressively.
+```
+
+## Fix: Brainstorm Chat Must Work With @Mentions
+
+In Brainstorm Chat mode (`/brainstorm`):
+- All 3+ agents see the full conversation history
+- When Boss types `@ClaudeCode` → only Claude Code responds
+- When Boss types message with no @mention → all agents respond
+- Agents can @mention each other
+
+Parse mentions:
+```javascript
+function parseMentions(message, profiles) {
+  const mentions = [];
+  Object.values(profiles).forEach(profile => {
+    const nameNoSpaces = profile.name.replace(/\s+/g, '');
+    if (new RegExp(`@${nameNoSpaces}`, 'i').test(message)) {
+      mentions.push(profile.id);
+    }
+  });
+  return mentions;
+}
+```
+
+## Fix: Auto-Save After Approval
+
+When Boss clicks Approve on final answer, AUTOMATICALLY:
+```javascript
+ipcRenderer.send('save-session-to-brain', {
+  sessionId, sessionName, taskType, task,
+  finalAnswer, seniorAgent, agents,
+  researchData, combinedDoc,
+  bossApproved: true,
+  sendBackCount,
+});
+// Show toast: "💾 Session saved to Brain"
+```
+
+## Fix: Correct Models For Each Provider
+
+**Claude Code models** (maps to proxy Opus/Sonnet/Haiku slots):
+- claude-opus-4-6
+- claude-sonnet-4-5-20250929
+- claude-haiku-4-5-20251001
+
+**Codex models** (2 slots — main + subagent):
+- Main: gpt-5.5, gpt-5.4, gpt-5.3-codex, gpt-5.1-codex-max
+- Subagent: gpt-5.4-mini, gpt-5.5, gpt-5.4
+
+**Gemini CLI models** (native subscription):
+- auto (default — auto-routes Flash/Pro by complexity)
+- gemini-2.5-pro
+- gemini-2.5-flash
+- gemini-2.5-flash-lite
+- gemini-3.1-pro-preview
+- gemini-3.1-flash-lite
+
+Remove ALL fake/wrong model names (DeepSeek Coder, Anti-Gravity Claude, GPT-40, etc.)
+
+## Use Your Own Judgment On Agent Logic
+
+You have creative freedom here too. If you see agent behavior that could be smarter — improve it. If the pipeline flow could be more reliable — fix it. If error handling could be better — make it better. Use your own intelligence to make this system work as well as possible.
+
+---
+
+# PART 3 — FULL LOGIC AUDIT & IMPROVEMENT
+
+## Every System To Check And Improve
+
+Go through every file and every system. For each one: understand what it currently does, compare to what it should do, fix gaps, improve where possible.
+
+### 1. agentRunner.js
+**Should do:** Spawn CLI tools as subprocesses, parse their stdout correctly per output format, emit agent-chunk/done/error events, handle timeouts, filter warnings.
+**Check:** Is stdout parsing correct for each provider? Are warnings filtered? Is the IPC forwarding correct? Is shell:true set? Are stdio pipes configured?
+**Improve:** Add per-agent timeouts. Add better error classification. Improve stream parsing reliability.
+
+### 2. pipelineManager.js
+**Should do:** Control full task flow for all 11 task types. Handle checkpoints. Manage Auto vs Manual mode. Route research to Research Panel.
+**Check:** Does each pipeline (quick/mid/deep/code/teamcode/review/debug/plan/test/apptest/doc/brainstorm) work correctly end to end? Are checkpoints firing? Is Auto mode skipping correctly? Is final answer always requiring approval?
+**Improve:** Add better error recovery. Make pipelines more resilient. Add progress tracking.
+
+### 3. collaborationManager.js
+**Should do:** Run 3-round brainstorm with Proposer/Critic/Verifier roles. Detect early consensus. Run evidence voting. Handle deadlock.
+**Check:** Are roles being assigned? Is early consensus detection working? Is the evidence vote being counted correctly? Is deadlock being detected?
+**Improve:** Make consensus detection smarter. Improve vote counting. Better deadlock messages.
+
+### 4. skillBuilder.js
+**Should do:** Build dynamic skill briefings per task type per agent. Include agent-specific ability instructions. Include brain memory. Include resume context.
+**Check:** Is the briefing being prepended to every agent spawn? Does each agent get their specific ability instructions? Is brain memory being injected?
+**Improve:** Make briefings more concise and effective. Remove redundancy. Add clearer output format instructions.
+
+### 5. brainMemory.js
+**Should do:** Save session data after approval. Load session context for resume. Track agent performance. Track skill performance.
+**Check:** Is saveSession creating the correct files? Is loadSessionContext returning usable data? Is the resume briefing being injected into new tasks in resumed sessions?
+**Improve:** Better MOC file generation. Smarter context loading for resume.
+
+### 6. taskDetector.js
+**Should do:** Detect task type from slash commands (exact match) and keywords (fallback). Strip slash command from message before sending to agents.
+**Check:** Does every slash command map correctly? Does keyword detection work for natural language? Is stripSlashCommand working?
+**Improve:** Handle edge cases. Better keyword matching. Handle mixed messages.
+
+### 7. sessionContext.js
+**Should do:** Track all active session state — taskType, seniorAgent, activeAgents, mode, workDir, resumeBriefing, executionModes.
+**Check:** Is state being set correctly? Is it being cleared properly between sessions? Is it accessible to pipeline and skill builder?
+**Improve:** Add missing fields. Better state management.
+
+### 8. providerProfiles.js
+**Should do:** Define all 5 providers with correct commands, args, models, env vars, capabilities, execution modes.
+**Check:** Are all 5 providers configured? Are model lists correct? Is executionModes defined? Is usesProxy set correctly per provider?
+**Improve:** Add execution mode metadata. Add native/proxy capability descriptions.
+
+### 9. GeneralTab.jsx (Main Chat)
+**Should do:** Show all messages in correct order. Handle all IPC events. Show research notification (not raw research). Show checkpoints. Show mode badge. Handle slash commands. Handle @mentions. Show senior agent star.
+**Check:** Is the IPC cleanup happening in useEffect return? Is sessionId filter causing dropped messages? Is research routing correctly? Are all event types rendering correctly?
+**Improve:** Better message grouping. Smarter scroll behavior. Better loading states.
+
+### 10. App.jsx (Session Management)
+**Should do:** Load sessions from Brain. Show grouped sidebar. Handle session resume with brain context injection. Handle all session actions.
+**Check:** Are sessions loading from Brain files? Is date formatting working? Are agent names showing? Is resume briefing being injected?
+**Improve:** Better session loading. Smarter sidebar grouping.
+
+### 11. IPC Channel Audit
+Go through EVERY ipcRenderer.send/invoke call in renderer. Verify EVERY one has a matching ipcMain handler. List any mismatches and add missing handlers.
+
+### 12. Memory Leak Audit
+Every ipcRenderer.on() must be cleaned up:
+```javascript
+useEffect(() => {
+  const handler = (event, data) => { ... };
+  ipcRenderer.on('channel', handler);
+  return () => ipcRenderer.removeListener('channel', handler); // REQUIRED
+}, [deps]);
+```
+Find and fix every missing cleanup.
+
+### 13. Error Handling Audit
+Every error must:
+1. Appear in chat as styled message (never just console.log)
+2. Tell user WHY it happened
+3. Give at least 2 recovery options
+4. Never lose session data
+
+Check all error paths and improve messaging.
+
+### 14. Settings Page — All Sections Must Work
+- Providers: toggle active/inactive, test connection, add custom
+- Proxy: save/load URL and API key
+- Brain: show path, open in explorer
+- Skills: load and edit actual skill files from brain/skills/
+- Session Defaults: save mode/senior agent/timeout
+- Notifications: toggle desktop/toast/sound
+- Appearance: accent color, font size, density — apply immediately
+- Export: format preference, include/exclude options
+
+No section should be "Coming Soon". All must be functional.
+
+## Creative Improvements — Your Call
+
+Beyond fixing what is broken, here are areas where you should use your own judgment to make the app better:
+
+1. **Message threading** — should messages from the same agent in a sequence be visually grouped?
+2. **Progress indicators** — can you show a more precise progress state during long research tasks?
+3. **Keyboard shortcuts** — what shortcuts would make this app faster to use?
+4. **Session search** — can search be smarter and faster?
+5. **Error recovery** — can the app recover more automatically from common errors?
+6. **Performance** — are there any obvious performance bottlenecks you can see in the code?
+7. **Accessibility** — can you improve keyboard navigation and screen reader support?
+8. **Onboarding** — if a brand new user opens this app, what would confuse them?
+
+For each of these — if you see a clear improvement, make it. Do not ask for permission. Improve it and document what you changed.
+
+---
+
+## VERIFICATION AFTER ALL CHANGES
+
+Run these checks:
+```bash
+node --check src/main/agentRunner.js
+node --check src/main/pipelineManager.js
+node --check src/main/collaborationManager.js
+node --check src/main/skillBuilder.js
+node --check src/main/brainMemory.js
+npm run build
+npm run dev
+```
+
+Test these scenarios manually:
+1. `/quick AI trends 2025` → agents respond with research → Research Panel populated → checkpoint appears
+2. `/deep latest AI news` → full 3-round brainstorm runs → final answer appears
+3. `/code build a todo app` → coding pipeline runs → code summary appears
+4. `/brainstorm how should we design our API` → free conversation with @mentions working
+5. `/model` → model selector appears in chat with correct models for each provider
+6. `/mode` → toggles Auto/Manual, badge updates
+7. Approve final answer → session auto-saves to Brain → toast appears
+
+Document everything you changed in a summary at the end.

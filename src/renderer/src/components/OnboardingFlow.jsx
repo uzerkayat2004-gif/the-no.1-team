@@ -1,164 +1,216 @@
 import React, { useState } from 'react'
 
-export default function OnboardingFlow({ onComplete }) {
-  const [step, setStep] = useState(1)
-  const [installedProviders, setInstalledProviders] = useState({ 'Claude Code': true })
-  const [proxyType, setProxyType] = useState('9router')
-  const [testStatus, setTestStatus] = useState('')
+const PROVIDERS = [
+  { name: 'Claude Code', icon: '🟠', desc: 'Anthropic\'s powerful coding agent' },
+  { name: 'Codex',       icon: '⬜', desc: 'OpenAI GPT-based code generation' },
+  { name: 'Gemini CLI',  icon: '🔵', desc: 'Google\'s multimodal agent' },
+  { name: 'Aider',       icon: '🟢', desc: 'Open-source pair programmer' },
+  { name: 'OpenCode',    icon: '🩷', desc: 'Community AI code agent' },
+]
 
-  const toggleProvider = (name) => {
-    setInstalledProviders(prev => ({ ...prev, [name]: !prev[name] }))
+const TOUR_SLIDES = [
+  {
+    icon: '⚡',
+    title: 'Give a task. Agents do the work.',
+    desc: 'Type any research or coding task. Multiple AI agents collaborate in parallel to deliver the best result.',
+  },
+  {
+    icon: '👑',
+    title: 'One senior agent leads.',
+    desc: 'The Senior Agent synthesizes all agent responses into a final, high-quality answer.',
+  },
+  {
+    icon: '✋',
+    title: 'You stay in control.',
+    desc: 'In Manual mode, you approve each checkpoint. In Auto mode, the pipeline runs hands-free.',
+  },
+]
+
+export default function OnboardingFlow({ onComplete }) {
+  const [step, setStep]                     = useState(1)
+  const [installed, setInstalled]           = useState({ 'Claude Code': true })
+  const [proxyType, setProxyType]           = useState('9router')
+  const [proxyUrl, setProxyUrl]             = useState('http://localhost:20128')
+  const [proxyKey, setProxyKey]             = useState('')
+  const [testStatus, setTestStatus]         = useState('')
+  const [tourSlide, setTourSlide]           = useState(0)
+
+  const toggleInstalled = name => setInstalled(p => ({ ...p, [name]: !p[name] }))
+
+  const testConnection = () => {
+    setTestStatus('Testing...')
+    setTimeout(() => setTestStatus('✅ Connection successful'), 1200)
   }
 
-  // Step 1: Welcome
-  if (step === 1) {
+  const nextTour = () => {
+    if (tourSlide < TOUR_SLIDES.length - 1) setTourSlide(t => t + 1)
+    else setStep(5)
+  }
+
+  // ── Step 1: Welcome ──────────────────────────────────────────
+  if (step === 1) return (
+    <div className="onboarding-screen">
+      <div className="onboarding-content center-content">
+        <div style={{
+          width: 72, height: 72, borderRadius: '50%', marginBottom: 28,
+          background: 'linear-gradient(135deg, var(--accent), var(--agent-claude))',
+          boxShadow: '0 0 48px rgba(124,110,250,0.3)', flexShrink: 0,
+        }} />
+        <h1 className="onboarding-title">Welcome to No. 1 Team</h1>
+        <p className="onboarding-subtitle">
+          Your multi-agent AI command center.<br />
+          Coordinate Claude Code, Codex, Gemini CLI,<br />
+          and more — all from one place.
+        </p>
+        <button className="btn-primary onboarding-btn-large" onClick={() => setStep(2)}>
+          Get Started →
+        </button>
+      </div>
+    </div>
+  )
+
+  // ── Step 2: Providers ─────────────────────────────────────────
+  if (step === 2) return (
+    <div className="onboarding-screen">
+      <div className="onboarding-content">
+        <h2 className="onboarding-heading">Which AI tools do you have installed?</h2>
+
+        <div className="provider-list">
+          {PROVIDERS.map(p => (
+            <div key={p.name} className="provider-item">
+              <span className="provider-icon">{p.icon}</span>
+              <div style={{ flex: 1 }}>
+                <div className="provider-name">{p.name}</div>
+                <div style={{ font: '400 11px var(--font-body)', color: 'var(--text-3)', marginTop: 2 }}>{p.desc}</div>
+              </div>
+              <div className="provider-actions">
+                <div
+                  className={`toggle-switch ${installed[p.name] ? '' : 'off'}`}
+                  onClick={() => toggleInstalled(p.name)}
+                />
+                <a href="#" className="install-link" onClick={e => e.preventDefault()}>Guide</a>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button className="btn-ghost" style={{ marginTop: 12 }}>+ Add Custom Provider</button>
+
+        <div className="onboarding-footer">
+          <button className="btn-ghost" onClick={() => setStep(3)}>Skip</button>
+          <button className="btn-primary" onClick={() => setStep(3)}>Test & Continue →</button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ── Step 3: Proxy ─────────────────────────────────────────────
+  if (step === 3) return (
+    <div className="onboarding-screen">
+      <div className="onboarding-content">
+        <h2 className="onboarding-heading">Using a proxy or router?</h2>
+
+        <div className="radio-group">
+          <label className="radio-label">
+            <input type="radio" name="proxy" checked={proxyType === '9router'} onChange={() => setProxyType('9router')} />
+            <span>Yes — 9Router or OpenRouter</span>
+          </label>
+          <label className="radio-label">
+            <input type="radio" name="proxy" checked={proxyType === 'other'} onChange={() => setProxyType('other')} />
+            <span>Yes — Different proxy</span>
+          </label>
+          <label className="radio-label">
+            <input type="radio" name="proxy" checked={proxyType === 'none'} onChange={() => setProxyType('none')} />
+            <span>No — Direct connections</span>
+          </label>
+        </div>
+
+        {proxyType !== 'none' && (
+          <div className="proxy-form">
+            <div className="form-group">
+              <label className="form-label">Proxy URL</label>
+              <input type="text" value={proxyUrl} onChange={e => setProxyUrl(e.target.value)} placeholder="http://localhost:20128" className="form-input" />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">API Key</label>
+              <input type="password" value={proxyKey} onChange={e => setProxyKey(e.target.value)} placeholder="your-proxy-api-key" className="form-input" />
+            </div>
+          </div>
+        )}
+
+        {proxyType !== 'none' && (
+          <button className="btn-secondary" style={{ marginBottom: 8 }} onClick={testConnection}>
+            {testStatus || 'Test Connection'}
+          </button>
+        )}
+
+        <div className="onboarding-footer">
+          <button className="btn-ghost" onClick={() => setStep(2)}>← Back</button>
+          <button className="btn-primary" onClick={() => setStep(4)}>Continue →</button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ── Step 4: Tour ──────────────────────────────────────────────
+  if (step === 4) {
+    const slide = TOUR_SLIDES[tourSlide]
     return (
       <div className="onboarding-screen">
         <div className="onboarding-content center-content">
-          <div className="onboarding-globe">🌍</div>
-          <h1 className="onboarding-title">Welcome to No. 1 Team</h1>
-          <p className="onboarding-subtitle">
-            Your multi-agent AI command center.<br/>
-            Coordinate Claude Code, Codex, Gemini,<br/>
-            and more — all from one place.
-          </p>
-          <button className="btn-primary onboarding-btn-large" onClick={() => setStep(2)}>
-            Get Started →
-          </button>
-        </div>
-      </div>
-    )
-  }
+          <div style={{
+            fontSize: 56, marginBottom: 24, width: 90, height: 90,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'var(--surface-3)', borderRadius: 'var(--radius-xl)',
+            border: '1px solid var(--border-3)',
+          }}>
+            {slide.icon}
+          </div>
 
-  // Step 2: Providers
-  if (step === 2) {
-    return (
-      <div className="onboarding-screen">
-        <div className="onboarding-content">
-          <h2 className="onboarding-heading">Which AI tools do you have installed?</h2>
-          
-          <div className="provider-list">
-            {['Claude Code', 'Codex', 'Gemini CLI', 'Aider', 'OpenCode'].map((name, i) => (
-              <div key={name} className="provider-item">
-                <span className="provider-icon">{['🟠', '⬜', '🔵', '🟢', '🩷'][i]}</span>
-                <span className="provider-name">{name}</span>
-                <div className="provider-actions">
-                  {installedProviders[name] ? (
-                    <span className="installed-badge" onClick={() => toggleProvider(name)} style={{ cursor: 'pointer' }}>Installed ✓</span>
-                  ) : (
-                    <div className="toggle-switch off" onClick={() => toggleProvider(name)}></div>
-                  )}
-                  <a href="#" className="install-link">Install Guide</a>
-                </div>
-              </div>
+          <h2 className="tour-title">{slide.title}</h2>
+          <p className="tour-desc">{slide.desc}</p>
+
+          <div className="tour-dots">
+            {TOUR_SLIDES.map((_, i) => (
+              <span key={i} className={`dot ${i === tourSlide ? 'active' : ''}`}
+                style={{ cursor: 'pointer' }} onClick={() => setTourSlide(i)} />
             ))}
           </div>
 
-          <button className="btn-ghost" style={{ marginTop: '16px' }}>+ Add Custom Provider</button>
-
-          <div className="onboarding-footer">
-            <button className="btn-ghost" onClick={() => setStep(3)}>Skip</button>
-            <button className="btn-primary" onClick={() => setStep(3)}>Test & Continue →</button>
+          <div className="onboarding-footer" style={{ width: '100%', marginTop: 32 }}>
+            <button className="btn-ghost" onClick={() => tourSlide > 0 ? setTourSlide(t => t - 1) : setStep(3)}>← Back</button>
+            <button className="btn-primary" onClick={nextTour}>
+              {tourSlide < TOUR_SLIDES.length - 1 ? 'Next →' : 'Finish Tour →'}
+            </button>
           </div>
         </div>
       </div>
     )
   }
 
-  // Step 3: Proxy
-  if (step === 3) {
-    return (
-      <div className="onboarding-screen">
-        <div className="onboarding-content">
-          <h2 className="onboarding-heading">Are you using a proxy or router?</h2>
-          
-          <div className="radio-group">
-            <label className="radio-label">
-              <input type="radio" name="proxy" checked={proxyType === '9router'} onChange={() => setProxyType('9router')} />
-              <span>Yes — I use 9Router or OpenRouter</span>
-            </label>
-            <label className="radio-label">
-              <input type="radio" name="proxy" checked={proxyType === 'other'} onChange={() => setProxyType('other')} />
-              <span>Yes — I use a different proxy</span>
-            </label>
-            <label className="radio-label">
-              <input type="radio" name="proxy" checked={proxyType === 'none'} onChange={() => setProxyType('none')} />
-              <span>No — direct connections</span>
-            </label>
-          </div>
-
-          {proxyType !== 'none' && (
-            <div className="proxy-form">
-              <div className="form-group">
-                <label className="form-label">Proxy URL:</label>
-                <input type="text" defaultValue="http://localhost:20128" className="form-input" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">API Key:</label>
-                <input type="password" placeholder="your-proxy-api-key" className="form-input" />
-              </div>
-            </div>
-          )}
-
-          <button className="btn-secondary" onClick={() => {
-            setTestStatus('Testing...')
-            setTimeout(() => setTestStatus('Connection Successful! ✅'), 1000)
-          }}>
-            {testStatus || 'Test Connection'}
-          </button>
-
-          <div className="onboarding-footer">
-            <button className="btn-ghost" onClick={() => setStep(2)}>Back</button>
-            <button className="btn-primary" onClick={() => setStep(4)}>Continue →</button>
-          </div>
+  // ── Step 5: Ready ─────────────────────────────────────────────
+  if (step === 5) return (
+    <div className="onboarding-screen">
+      <div className="onboarding-content center-content">
+        <div style={{
+          fontSize: 52, marginBottom: 24, width: 90, height: 90,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'var(--surface-3)', borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--border-3)',
+        }}>
+          🚀
         </div>
+        <h1 className="onboarding-title">You're all set.</h1>
+        <p className="onboarding-subtitle">
+          Your team is ready to work.<br />
+          Type <code style={{ background: 'var(--surface-4)', padding: '2px 6px', borderRadius: 4, fontSize: 14 }}>/</code> in the chat to see all commands.
+        </p>
+        <button className="btn-primary onboarding-btn-large" onClick={onComplete}>
+          Launch No. 1 Team →
+        </button>
       </div>
-    )
-  }
-
-  // Step 4: Tour
-  if (step === 4) {
-    return (
-      <div className="onboarding-screen">
-        <div className="onboarding-content center-content">
-          <div className="tour-slide">
-            <h2 className="tour-title">Give a task → Agents work together → Best answer delivered</h2>
-            <p className="tour-desc">No. 1 Team automates the research and coding pipeline for you.</p>
-          </div>
-          
-          <div className="tour-dots">
-            <span className="dot active"></span>
-            <span className="dot"></span>
-            <span className="dot"></span>
-          </div>
-
-          <div className="onboarding-footer">
-            <button className="btn-ghost" onClick={() => setStep(3)}>Back</button>
-            <button className="btn-primary" onClick={() => setStep(5)}>Next →</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Step 5: Ready
-  if (step === 5) {
-    return (
-      <div className="onboarding-screen">
-        <div className="onboarding-content center-content">
-          <div className="ready-icon">✅</div>
-          <h1 className="onboarding-title">You're all set.</h1>
-          <p className="onboarding-subtitle">
-            Your team is ready to work.<br/>
-            Type / in the chat to see all commands.
-          </p>
-          <button className="btn-primary onboarding-btn-large" onClick={onComplete}>
-            Start Using No. 1 Team
-          </button>
-        </div>
-      </div>
-    )
-  }
+    </div>
+  )
 
   return null
 }

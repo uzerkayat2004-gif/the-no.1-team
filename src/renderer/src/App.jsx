@@ -66,10 +66,10 @@ export default function App() {
   }
   const toggleProvider = (agentId) => setActiveProviders(prev => prev.includes(agentId) ? prev.filter(id => id !== agentId) : [...prev, agentId])
 
-  const buttonStyle = { padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer' };
-  const activeButtonStyle = { ...buttonStyle, background: 'var(--accent)', borderColor: 'var(--accent)', color: 'white' };
-  const selectStyle = { padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)', width: '100%', marginBottom: 16 };
-  const ghostButtonStyle = { padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 12 };
+  const buttonStyle = { padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-3)', background: 'var(--surface-3)', color: 'var(--text-2)', cursor: 'pointer', font: '400 13px var(--font-body)', transition: 'all 150ms' };
+  const activeButtonStyle = { ...buttonStyle, background: 'var(--accent)', borderColor: 'var(--accent)', color: 'white', fontWeight: 500 };
+  const selectStyle = { padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-2)', background: 'var(--surface-3)', color: 'var(--text-1)', width: '100%', marginBottom: 16, font: '400 14px var(--font-body)', outline: 'none', cursor: 'pointer' };
+  const ghostButtonStyle = { padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-2)', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', font: '400 12px var(--font-body)', transition: 'all 150ms' };
 
 
   // Check onboarding
@@ -415,23 +415,45 @@ export default function App() {
       const sess = sessions.find(s => s.id === activeSession)
       if (sess) sessionName = sess.title
     }
+    const viewLabel = view === 'settings' ? '⚙️ Settings' : view === 'brain' ? '🧠 Brain Files' : view === 'analytics' ? '📊 Analytics' : ''
 
     return (
       <div className="titlebar">
         <div className="titlebar-left">
           <div className="titlebar-dot" />
-          <span>No. 1 Team</span>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>No. 1 Team</span>
           {sessionName && (
             <>
               <span className="titlebar-sep">›</span>
               <span className="titlebar-session">💬 {sessionName}</span>
             </>
           )}
+          {viewLabel && !sessionName && (
+            <>
+              <span className="titlebar-sep">›</span>
+              <span className="titlebar-session">{viewLabel}</span>
+            </>
+          )}
         </div>
-        <div className="titlebar-controls">
-          <button className="titlebar-btn" onClick={minimizeWindow}>—</button>
-          <button className="titlebar-btn" onClick={maximizeWindow}>□</button>
-          <button className="titlebar-btn close" onClick={closeWindow}>✕</button>
+        <div className="titlebar-right">
+          {view !== 'home' && (
+            <button
+              onClick={() => setView('home')}
+              style={{
+                background: 'transparent', border: '1px solid var(--border-2)',
+                borderRadius: 'var(--radius-md)', color: 'var(--text-3)',
+                font: '400 11px var(--font-body)', padding: '3px 10px',
+                cursor: 'pointer', marginRight: 8,
+              }}
+            >
+              ← Home
+            </button>
+          )}
+          <div className="titlebar-controls">
+            <button className="titlebar-btn" onClick={minimizeWindow} title="Minimize">—</button>
+            <button className="titlebar-btn" onClick={maximizeWindow} title="Maximize">□</button>
+            <button className="titlebar-btn close" onClick={closeWindow} title="Close">✕</button>
+          </div>
         </div>
       </div>
     )
@@ -483,54 +505,58 @@ export default function App() {
           {/* BRAIN FILE BROWSER */}
           {view === 'brain' && (
             <div style={{ display: 'flex', height: '100%' }}>
-              <div style={{ width: '280px', borderRight: '1px solid var(--border)', background: 'var(--bg-sidebar)', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ padding: '12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', color: 'var(--text-primary)' }} onClick={() => setView('home')}>← Back</span>
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>🧠 Brain Files</span>
+              <div style={{ width: '260px', borderRight: '1px solid var(--border-1)', background: 'var(--surface-0)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+                <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ font: '600 12px var(--font-display)', color: 'var(--text-2)' }}>Brain Files</span>
+                  <span style={{ font: '400 11px var(--font-body)', color: 'var(--text-3)' }}>🧠</span>
                 </div>
-                <div style={{ padding: '8px' }}>
-                  <input value={brainSearch} onChange={e => searchBrain(e.target.value)} placeholder="Search brain files..."
-                    style={{ width: '100%', padding: '6px 10px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '12px', outline: 'none' }} />
+                <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border-1)' }}>
+                  <input value={brainSearch} onChange={e => searchBrain(e.target.value)} placeholder="Search..."
+                    style={{ width: '100%', padding: '6px 10px', background: 'var(--surface-3)', border: '1px solid var(--border-2)', borderRadius: 'var(--radius-md)', color: 'var(--text-1)', fontSize: '12px', outline: 'none', fontFamily: 'var(--font-body)' }} />
                 </div>
-                <div style={{ flex: 1, overflowY: 'auto' }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
                   {brainSearch && brainSearchResults.length > 0 ? (
                     brainSearchResults.map(r => (
-                      <div key={r.path} onClick={() => openBrainFile(r.path)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--bg-main)' }}>
-                        <div style={{ fontSize: '12px', color: 'var(--accent)' }}>{r.name}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{r.snippet}</div>
+                      <div key={r.path} onClick={() => openBrainFile(r.path)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-1)', transition: 'background 150ms' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ font: '500 12px var(--font-body)', color: 'var(--accent)' }}>{r.name}</div>
+                        <div style={{ font: '400 11px var(--font-body)', color: 'var(--text-3)', marginTop: 2 }}>{r.snippet}</div>
                       </div>
                     ))
                   ) : (
-                    brainTree.map(node => renderBrainTreeNode(node))
+                    brainTree.length > 0
+                      ? brainTree.map(node => renderBrainTreeNode(node))
+                      : <div style={{ padding: '20px 16px', font: '400 12px var(--font-body)', color: 'var(--text-3)', textAlign: 'center' }}>Brain files load when Electron is running.</div>
                   )}
                 </div>
               </div>
 
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--surface-1)' }}>
                 {brainFilePath ? (
                   <>
-                    <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-elevated)' }}>
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{brainFilePath}</span>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-2)', flexShrink: 0 }}>
+                      <span style={{ font: '400 12px var(--font-mono)', color: 'var(--text-3)' }}>{brainFilePath}</span>
+                      <div style={{ display: 'flex', gap: 8 }}>
                         {brainEditing ? (
-                          <button onClick={saveBrainFile} className="btn-primary">Save</button>
+                          <button onClick={saveBrainFile} className="btn-accent" style={{ height: 28, padding: '0 14px', fontSize: 12 }}>Save</button>
                         ) : (
-                          <button onClick={() => setBrainEditing(true)} className="btn-secondary">Edit</button>
+                          <button onClick={() => setBrainEditing(true)} className="btn-secondary" style={{ height: 28, padding: '0 14px', fontSize: 12 }}>Edit</button>
                         )}
                       </div>
                     </div>
-                    <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+                    <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }}>
                       {brainEditing ? (
                         <textarea value={brainFileContent} onChange={e => setBrainFileContent(e.target.value)}
-                          className="form-textarea" style={{ height: '100%' }} />
+                          className="form-textarea" style={{ height: '100%', minHeight: 400 }} />
                       ) : (
-                        <pre style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.6', whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'var(--font-mono)' }}>{brainFileContent}</pre>
+                        <pre style={{ font: '400 13px/1.7 var(--font-mono)', color: 'var(--text-1)', whiteSpace: 'pre-wrap', margin: 0 }}>{brainFileContent}</pre>
                       )}
                     </div>
                   </>
                 ) : (
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-                    Select a file from the sidebar to view its contents.
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                    <div style={{ font: '400 13px var(--font-body)', color: 'var(--text-3)' }}>Select a file to view its contents</div>
                   </div>
                 )}
               </div>
@@ -541,17 +567,16 @@ export default function App() {
           {view === 'settings' && (
             <div className="settings-container">
               <div className="settings-nav">
-                <div style={{ padding: '0 12px 16px', borderBottom: '1px solid var(--border)', marginBottom: '16px' }}>
-                  <span style={{ fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', color: 'var(--text-primary)' }} onClick={() => setView('home')}>← Back</span>
+                <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid var(--border-1)', marginBottom: '8px' }}>
+                  <span style={{ font: '600 12px var(--font-display)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Settings</span>
                 </div>
-                
                 <div className={`settings-nav-item ${settingsTab === 'providers' ? 'active' : ''}`} onClick={() => setSettingsTab('providers')}>🤖 Providers</div>
                 <div className={`settings-nav-item ${settingsTab === 'proxy' ? 'active' : ''}`} onClick={() => setSettingsTab('proxy')}>🔌 Proxy</div>
                 <div className={`settings-nav-item ${settingsTab === 'brain' ? 'active' : ''}`} onClick={() => setSettingsTab('brain')}>🧠 Brain</div>
                 <div className={`settings-nav-item ${settingsTab === 'skills' ? 'active' : ''}`} onClick={() => setSettingsTab('skills')}>📋 Skills</div>
                 <div className={`settings-nav-item ${settingsTab === 'defaults' ? 'active' : ''}`} onClick={() => setSettingsTab('defaults')}>⚙️ Defaults</div>
                 <div className={`settings-nav-item ${settingsTab === 'notifs' ? 'active' : ''}`} onClick={() => setSettingsTab('notifs')}>🔔 Notifs</div>
-                <div className={`settings-nav-item ${settingsTab === 'appear' ? 'active' : ''}`} onClick={() => setSettingsTab('appear')}>🎨 Appear.</div>
+                <div className={`settings-nav-item ${settingsTab === 'appear' ? 'active' : ''}`} onClick={() => setSettingsTab('appear')}>🎨 Appearance</div>
                 <div className={`settings-nav-item ${settingsTab === 'export' ? 'active' : ''}`} onClick={() => setSettingsTab('export')}>📤 Export</div>
               </div>
 
@@ -901,10 +926,10 @@ export default function App() {
 
           {/* ANALYTICS VIEW */}
           {view === 'analytics' && (
-            <div className="analytics-container" style={{ padding: 24, overflow: 'auto' }}>
-              <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', color: 'var(--text-primary)', display: 'inline-block', padding: '8px 12px', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)' }} onClick={() => setView('home')}>← Back</span>
-                <h2 style={{ margin: 0, color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>📊 Analytics Dashboard</h2>
+            <div className="analytics-container" style={{ padding: '32px 36px', overflow: 'auto', flexDirection: 'column', display: 'flex' }}>
+              <div style={{ marginBottom: 28 }}>
+                <h2 style={{ margin: 0, font: '600 17px var(--font-display)', color: 'var(--text-1)' }}>Analytics Dashboard</h2>
+                <p style={{ margin: '4px 0 0', font: '400 13px var(--font-body)', color: 'var(--text-2)' }}>Usage stats and session history</p>
               </div>
 
               {analyticsLoading && <div style={{ color: 'var(--text-secondary)', padding: 32, textAlign: 'center' }}>Loading analytics...</div>}
