@@ -516,7 +516,12 @@ export default function App() {
 
           {/* SESSION VIEW */}
           {view === 'session' && (
-            <GeneralTab sessionId={activeSession} />
+            <GeneralTab
+              sessionId={activeSession}
+              onTitleUpdate={(title) =>
+                setSessions(prev => prev.map(s => s.id === activeSession ? { ...s, title } : s))
+              }
+            />
           )}
 
           {/* SETTINGS VIEW */}

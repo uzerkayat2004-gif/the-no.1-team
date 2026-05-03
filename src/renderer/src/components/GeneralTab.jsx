@@ -108,13 +108,17 @@ function MessageContent({ content }) {
 }
 
 
-export default function GeneralTab({ sessionId }) {
+export default function GeneralTab({ sessionId, onTitleUpdate }) {
   const [messages, setMessages]               = useState([])
   const [inputText, setInputText]             = useState('')
   const [target, setTarget]                   = useState('all')
   const [isRunning, setIsRunning]             = useState(false)
   const [agentStatus, setAgentStatus]         = useState({})
   const bottomRef = useRef(null)
+
+  // Stable refs so async event-listener callbacks never read stale closure values
+  const profilesRef    = useRef(null)
+  const seniorAgentRef = useRef(null)
 
   const [seniorAgent, setSeniorAgent]         = useState(null)
   const [showSeniorPicker, setShowSeniorPicker] = useState(false)
@@ -158,6 +162,7 @@ export default function GeneralTab({ sessionId }) {
       try {
         const p = await window.teamAPI.getProviderProfiles()
         setProfiles(p)
+        profilesRef.current = p
         const defaults = {}, execDefaults = {}
         Object.values(p).forEach(profile => {
           defaults[profile.id] = profile.defaultModel
@@ -169,6 +174,10 @@ export default function GeneralTab({ sessionId }) {
     }
     loadProfiles()
   }, [])
+
+  // Keep refs in sync so async callbacks always read fresh values
+  useEffect(() => { profilesRef.current = profiles },    [profiles])
+  useEffect(() => { seniorAgentRef.current = seniorAgent }, [seniorAgent])
 
   // Load session
   useEffect(() => {
@@ -187,16 +196,19 @@ export default function GeneralTab({ sessionId }) {
     load()
   }, [sessionId])
 
-  // Save session
+  // Save session — include all stateful values so stored data stays fresh
   useEffect(() => {
     if (!currentSessionId || messages.length === 0) return
     const num = currentSessionId.replace('session-', '')
+    const firstUserMsg = messages.find(m => m.agent === 'You')
+    const title = firstUserMsg?.content?.slice(0, 80).trim() || 'New Session'
     window.teamAPI?.session?.saveState(num, {
-      title: messages.find(m => m.agent === 'You')?.content?.slice(0, 80) || 'New Session',
-      messages, seniorAgent, currentMode, workspaceDir,
+      title, messages, seniorAgent, currentMode, workspaceDir,
       lastUpdated: new Date().toISOString()
     })
-  }, [messages, currentSessionId])
+    // Sync title back to sidebar
+    if (firstUserMsg && onTitleUpdate) onTitleUpdate(title)
+  }, [messages, currentSessionId, seniorAgent, currentMode, workspaceDir])
 
   function addMsg(msg) {
     setMessages(prev => [...prev, { id: Date.now() + Math.random(), timestamp: new Date(), ...msg }])
@@ -285,7 +297,8 @@ export default function GeneralTab({ sessionId }) {
       if (data.sessionId !== currentSessionId) return
       setCombinedDoc(data.combinedDoc)
       if (data.combinedDoc?.trim()) {
-        addMsg({ agent: profiles?.[seniorAgent]?.name || 'Senior Agent', agentId: seniorAgent, content: data.combinedDoc })
+        const sr = seniorAgentRef.current
+        addMsg({ agent: profilesRef.current?.[sr]?.name || 'Senior Agent', agentId: sr, content: data.combinedDoc })
       }
     }))
 
@@ -332,18 +345,20 @@ export default function GeneralTab({ sessionId }) {
 
     removers.push(window.teamAPI.onPipelineEvent?.('pipeline-complete', (data) => {
       if (data.sessionId !== currentSessionId) return
+      const sr = seniorAgentRef.current
       setPipelineComplete(true)
       setIsRunning(false)
       if (data.finalAnswer?.trim()) {
-        addMsg({ agent: profiles?.[seniorAgent]?.name || 'Senior Agent', agentId: seniorAgent, content: data.finalAnswer })
+        addMsg({ agent: profilesRef.current?.[sr]?.name || 'Senior Agent', agentId: sr, content: data.finalAnswer })
       }
       addMsg({ type: 'system', content: '✅ Pipeline complete. Session saved.', agent: 'System', isSystem: true })
-      setLastSessionData({
-        sessionName: originalTask?.slice(0, 40) || 'Session',
-        taskType: currentTaskType, task: originalTask,
+      setLastSessionData(prev => ({
+        sessionName: prev?.task?.slice(0, 40) || 'Session',
+        taskType: prev?.taskType || 'general', task: prev?.task,
         finalAnswer: data.finalAnswer, date: new Date().toISOString().slice(0, 10),
-        agents: getAgentKeys(), seniorAgent,
-      })
+        agents: profilesRef.current ? Object.keys(profilesRef.current) : ['claude','codex','gemini'],
+        seniorAgent: sr,
+      }))
     }))
 
     return () => removers.forEach(fn => fn?.())
@@ -353,8 +368,9 @@ export default function GeneralTab({ sessionId }) {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   function getAgentKeys() {
-    if (target === 'all') return ['claude', 'codex', 'gemini']
-    return [target]
+    const available = profiles ? Object.keys(profiles) : ['claude', 'codex', 'gemini']
+    if (target === 'all') return available
+    return available.includes(target) ? [target] : available
   }
 
   async function sendMessage() {
@@ -415,18 +431,34 @@ export default function GeneralTab({ sessionId }) {
   }
 
   function startPipeline(task, taskTypeId, agents) {
+    // Reset previous run state so a fresh pipeline starts clean
+    setPipelineComplete(false)
+    setBrainstormChatActive(false)
+    setLastSessionData({ task, taskType: taskTypeId })
+    setHasResearch(false)
+    setResearchData({})
+    setCombinedDoc(null)
     setIsRunning(true)
     const newStatus = {}
     agents.forEach(a => { newStatus[a] = 'running' })
     setAgentStatus(newStatus)
 
-    window.teamAPI?.createSessionContext?.({ sessionId: currentSessionId, task, taskType: taskTypeId, activeAgents: agents, mode: currentMode, executionModes, seniorAgent, workDir: workspaceDir || null })
-    window.teamAPI?.startPipeline?.({ sessionId: currentSessionId, taskType: taskTypeId, task, agents, models: selectedModels, subagentModels: selectedSubagentModels, executionModes, workDir: workspaceDir || null, mode: currentMode, seniorAgent })
+    const workDir = workspaceDir?.trim() || null
+    window.teamAPI?.createSessionContext?.({ sessionId: currentSessionId, task, taskType: taskTypeId, activeAgents: agents, mode: currentMode, executionModes, seniorAgent, workDir })
+    window.teamAPI?.startPipeline?.({ sessionId: currentSessionId, taskType: taskTypeId, task, agents, models: selectedModels, subagentModels: selectedSubagentModels, executionModes, workDir, mode: currentMode, seniorAgent })
   }
 
   function handleSeniorSelect(agentId) {
-    const resolved = agentId === 'auto' ? getAgentKeys()[0] : agentId
+    let resolved = agentId
+    if (agentId === 'auto') {
+      // Task-type-aware auto selection: pick the best agent for the job
+      const taskMap = { code: 'codex', debug: 'claude', review: 'claude', test: 'codex', apptest: 'codex', doc: 'gemini', plan: 'gemini', research: 'gemini', deep: 'gemini', quick: 'claude' }
+      const preferred = taskMap[currentTaskType]
+      const available = getAgentKeys()
+      resolved = (preferred && available.includes(preferred)) ? preferred : available[0]
+    }
     setSeniorAgent(resolved)
+    seniorAgentRef.current = resolved
     setShowSeniorPicker(false)
     addMsg({ type: 'system', content: `👑 Senior Agent: ${profiles?.[resolved]?.name || resolved}`, agent: 'System', isSystem: true })
     if (pendingTask) { startPipeline(pendingTask.message, pendingTask.taskType, pendingTask.agents); setPendingTask(null) }
@@ -455,9 +487,17 @@ export default function GeneralTab({ sessionId }) {
   }
 
   function selectSlashCommand(cmd) {
-    if (cmd.cmd === '/stop') { handleStopAll(); setSlashMenuOpen(false); setInputText(''); return }
-    if (cmd.cmd === '/clear') { setMessages([]); setSlashMenuOpen(false); setInputText(''); return }
-    if (cmd.cmd === '/workspace') { window.teamAPI?.openWorkspace?.(); setSlashMenuOpen(false); setInputText(''); return }
+    if (cmd.cmd === '/stop')      { handleStopAll(); setSlashMenuOpen(false); setInputText(''); return }
+    if (cmd.cmd === '/clear')     { setMessages([]); setSlashMenuOpen(false); setInputText(''); return }
+    if (cmd.cmd === '/workspace') {
+      // Inject the workspace panel card into the chat instead of calling a no-op API
+      addMsg({ type: 'workspace-panel', content: 'Workspace', agent: 'System', isSystem: true })
+      setSlashMenuOpen(false); setInputText(''); return
+    }
+    if (cmd.cmd === '/senior') {
+      setShowSeniorPicker(true)
+      setSlashMenuOpen(false); setInputText(''); return
+    }
     if (cmd.cmd === '/mode') {
       const newMode = currentMode === 'auto' ? 'manual' : 'auto'
       setCurrentMode(newMode)
@@ -496,9 +536,23 @@ export default function GeneralTab({ sessionId }) {
     { icon: '🗑️', cmd: '/clear',    label: 'Clear Chat',      desc: 'Delete all messages' },
   ]
 
-  const filteredSlash = slashCommands.filter(c =>
-    c.type === 'header' || c.cmd.includes(slashQuery) || c.label.toLowerCase().includes(slashQuery)
-  )
+  const filteredSlash = (() => {
+    if (!slashQuery) return slashCommands
+    // Filter matching commands first
+    const matches = slashCommands.filter(c => c.type !== 'header' && (c.cmd.includes(slashQuery) || c.label.toLowerCase().includes(slashQuery)))
+    if (matches.length === 0) return matches
+    // Rebuild with section headers only if they have matching children
+    const result = []
+    let pendingHeader = null
+    for (const item of slashCommands) {
+      if (item.type === 'header') { pendingHeader = item; continue }
+      if (matches.includes(item)) {
+        if (pendingHeader) { result.push(pendingHeader); pendingHeader = null }
+        result.push(item)
+      }
+    }
+    return result
+  })()
 
   // ── Select styles for model selector
   const selStyle = {
@@ -585,10 +639,7 @@ export default function GeneralTab({ sessionId }) {
           </div>
         )}
 
-        {/* Senior Agent picker inline */}
-        {showSeniorPicker && profiles && (
-          <SeniorAgentSelector activeAgents={getAgentKeys()} profiles={profiles} onSelect={handleSeniorSelect} />
-        )}
+        {/* Senior Agent picker is shown in the messaging bar — not duplicated here */}
 
         {messages.map((msg, idx) => {
           const isBoss = msg.agent === 'You' || msg.agent === 'BOSS'
@@ -823,9 +874,9 @@ export default function GeneralTab({ sessionId }) {
               <div className="slash-icon">👥</div>
               <div className="slash-desc">All Agents</div>
             </div>
-            {['claude','codex','gemini'].map(id => (
+            {Object.keys(profiles || { claude: null, codex: null, gemini: null }).map(id => (
               <div key={id} className="slash-item" onClick={() => { setTarget(id); setTagDropdownOpen(false) }}>
-                <div className="slash-icon" style={{ color: AGENT_COLORS[id] }}>●</div>
+                <div className="slash-icon" style={{ color: AGENT_COLORS[id] || 'var(--text-2)' }}>●</div>
                 <div className="slash-desc">{profiles?.[id]?.name || id}</div>
               </div>
             ))}
