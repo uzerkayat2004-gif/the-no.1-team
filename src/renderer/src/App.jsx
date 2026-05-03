@@ -51,7 +51,7 @@ export default function App() {
   const [activeProviders, setActiveProviders] = useState(['claude', 'codex', 'gemini'])
   const [installStatus, setInstallStatus] = useState({})
   const [showAddProvider, setShowAddProvider] = useState(false)
-  const [currentAccent, setCurrentAccent] = useState('#F97316')
+  const [currentAccent, setCurrentAccent] = useState('#FFFFFF')
   const [fontSize, setFontSize] = useState('14px')
   const [density, setDensity] = useState('normal')
   const [profiles, setProfiles] = useState({})
