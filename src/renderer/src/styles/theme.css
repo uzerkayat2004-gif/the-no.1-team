@@ -490,6 +490,44 @@ button, a, input, select, textarea, [role="button"] {
 .session-card-line2 { font: 400 11px var(--font-body); color: var(--text-3); }
 .session-card-line3 { font: 400 10px var(--font-body); color: var(--text-4); }
 
+/* ── Sidebar collapse / expand ── */
+.sidebar {
+  transition: width 260ms cubic-bezier(0.4,0,0.2,1),
+              min-width 260ms cubic-bezier(0.4,0,0.2,1),
+              border-color 260ms ease;
+}
+.sidebar.collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  overflow: hidden;
+  border-right-color: transparent;
+}
+.sidebar-collapse-btn {
+  width: 26px; height: 26px; border-radius: var(--radius-sm);
+  background: transparent; border: 1px solid var(--border-2);
+  color: var(--text-3); font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  margin-left: auto; flex-shrink: 0;
+  transition: background 150ms, color 150ms, border-color 150ms;
+}
+.sidebar-collapse-btn:hover {
+  background: var(--surface-3); color: var(--text-1);
+  border-color: var(--border-3);
+}
+.sidebar-expand-btn {
+  position: absolute; top: 54px; left: 0; z-index: 30;
+  width: 22px; height: 44px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2); border-left: none;
+  color: var(--text-2); font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 150ms, color 150ms, transform 150ms;
+}
+.sidebar-expand-btn:hover {
+  background: var(--surface-3); color: var(--text-1); transform: translateX(3px);
+}
+
 /* Sidebar bottom — settings + theme toggle */
 .sidebar-bottom { border-top: 1px solid var(--border-1); padding: 6px; }
 .sidebar-bottom-row { display: flex; align-items: center; gap: 4px; }
@@ -813,7 +851,7 @@ button, a, input, select, textarea, [role="button"] {
 .task-type-close { font-size: 14px; color: var(--text-3); cursor: pointer; }
 .task-type-close:hover { color: var(--text-1); }
 
-.input-hint { display: flex; align-items: center; gap: 8px; margin-top: 5px; padding-left: 2px; }
+.input-hint { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 6px; }
 .input-hint-item {
   display: flex; align-items: center; gap: 4px;
   font: 400 11px var(--font-body); color: var(--text-4);

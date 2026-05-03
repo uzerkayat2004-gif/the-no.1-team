@@ -363,7 +363,7 @@ export default function App() {
     )
 
     return (
-      <div className="sidebar">
+      <div className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-app-name">
             <div className="sidebar-app-dot" />
@@ -378,6 +378,13 @@ export default function App() {
                 {sessions.length}
               </span>
             )}
+            <button
+              className="sidebar-collapse-btn"
+              onClick={() => setSidebarCollapsed(true)}
+              title="Collapse sidebar"
+            >
+              ‹
+            </button>
           </div>
           <button className="btn-new-session" onClick={createSession}>
             + New Session
@@ -501,15 +508,33 @@ export default function App() {
     <div className="app-container">
       {renderTitleBar()}
 
-      <div className="main-content">
+      <div className="main-content" style={{ position: 'relative' }}>
         {/* Sidebar always visible except on home view where it's part of the flex layout */}
         {view !== 'home' && renderSidebar()}
+        {view !== 'home' && sidebarCollapsed && (
+          <button
+            className="sidebar-expand-btn"
+            onClick={() => setSidebarCollapsed(false)}
+            title="Open sidebar"
+          >
+            ›
+          </button>
+        )}
 
         <div className="view-area">
           {/* HOME VIEW */}
           {view === 'home' && (
-            <div style={{ display: 'flex', flex: 1, height: '100%' }}>
+            <div style={{ display: 'flex', flex: 1, height: '100%', position: 'relative' }}>
               {renderSidebar()}
+              {sidebarCollapsed && (
+                <button
+                  className="sidebar-expand-btn"
+                  onClick={() => setSidebarCollapsed(false)}
+                  title="Open sidebar"
+                >
+                  ›
+                </button>
+              )}
               <div className="welcome-screen">
                 <div className="welcome-content">
                   {/* Realistic spinning Earth globe */}
