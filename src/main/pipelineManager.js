@@ -8,6 +8,9 @@ const { getAllProfiles, normalizeExecutionMode, getProfileForMode } = require('.
 const sessionCtx       = require('./sessionContext');
 const collaborationManager = require('./collaborationManager');
 const { detectResearchPolicy } = require('./taskDetector');
+const { checkSession }        = require('./authMiddleware');
+const { isRateLimited }       = require('./rateLimiter');
+
 
 const DEPTH_BY_TASK = {
   quick: 1,
@@ -31,7 +34,21 @@ class PipelineManager extends EventEmitter {
     this.pipelines = {};
   }
 
-  async startPipeline({ sessionId, taskType, task, agents, models, subagentModels, executionModes, workDir, mode, seniorAgent }) {
+  async startPipeline({ sessionId, taskType, task, agents, models, subagentModels, executionModes, workDir, mode, seniorAgent, userId, ip }) {
+    // 1. Security Check: Rate Limiting
+    if (ip && isRateLimited(ip)) {
+      this.emit('system-message', { sessionId, message: '⚠️ Rate limit exceeded. Please wait a minute.' });
+      return;
+    }
+
+    // 2. Security Check: Authentication
+    try {
+      if (userId) checkSession({ userId });
+    } catch (e) {
+      this.emit('system-message', { sessionId, message: `❌ Security Error: ${e.message}` });
+      return;
+    }
+
     // Validate topic — do not run pipeline with empty task
     if (!task || task.trim().length < 3) {
       this.emit('system-message', { sessionId, message: '⚠️ No topic provided. Please type your topic and send again.' });
