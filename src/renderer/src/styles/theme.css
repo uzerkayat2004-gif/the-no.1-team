@@ -254,8 +254,16 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
-  user-select: none;
+  user-select: text;
   transition: background 300ms ease, color 300ms ease;
+}
+
+/* Keep user-select: none only on UI chrome elements */
+.title-bar, .sidebar-header, .sidebar-section-header,
+button, .tab-btn, .slash-menu, .context-menu,
+.onboarding, .model-select, .agent-config-label,
+[role="button"] {
+  user-select: none;
 }
 
 button, a, input, select, textarea, [role="button"] {
@@ -647,6 +655,7 @@ button, a, input, select, textarea, [role="button"] {
 .msg-content {
   font: 400 14px/1.75 var(--font-body); color: var(--text-1);
   white-space: pre-wrap; word-break: break-word; user-select: text;
+  cursor: text;
 }
 
 /* Code blocks */
@@ -656,6 +665,7 @@ button, a, input, select, textarea, [role="button"] {
   padding: 14px 18px;
   font: 400 12.5px/1.65 var(--font-mono); color: var(--text-1);
   overflow-x: auto; margin: 0 0 10px;
+  user-select: text; cursor: text;
 }
 .code-block {
   margin: 10px 0; border-radius: var(--radius-md);

@@ -280,6 +280,30 @@ function createWindow() {
 
   mainWindow.webContents.openDevTools()
 
+  // Native right-click context menu with Copy, Paste, Select All, Inspect Element
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const { Menu, MenuItem } = require('electron')
+    const menu = new Menu()
+
+    if (params.isEditable) {
+      menu.append(new MenuItem({ role: 'cut', label: 'Cut' }))
+    }
+    if (params.selectionText) {
+      menu.append(new MenuItem({ role: 'copy', label: 'Copy' }))
+    }
+    if (params.isEditable) {
+      menu.append(new MenuItem({ role: 'paste', label: 'Paste' }))
+    }
+    menu.append(new MenuItem({ role: 'selectAll', label: 'Select All' }))
+    menu.append(new MenuItem({ type: 'separator' }))
+    menu.append(new MenuItem({
+      label: 'Inspect Element',
+      click: () => { mainWindow.webContents.inspectElement(params.x, params.y) }
+    }))
+
+    menu.popup({ window: mainWindow })
+  })
+
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     if (level >= 2) {
       console.log(`[Renderer ${level === 3 ? 'ERROR' : 'WARN'}] ${message} (${sourceId}:${line})`)
