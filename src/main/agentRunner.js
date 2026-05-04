@@ -633,6 +633,15 @@ class AgentRunner extends EventEmitter {
 
   // ═══ Helpers ═══
 
+  // Build a safe single-string command for cmd.exe /d /c on Windows.
+  // Wraps parts containing spaces or shell metacharacters in double quotes.
+  _quoteCommand(parts) {
+    return parts.map(part => {
+      const value = String(part ?? '');
+      return /[\s"&|<>^]/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
+    }).join(' ');
+  }
+
   _trackProcess(proc, agentId, sessionId) {
     if (!this.activeProcesses[sessionId]) this.activeProcesses[sessionId] = {};
     this.activeProcesses[sessionId][agentId] = proc;
