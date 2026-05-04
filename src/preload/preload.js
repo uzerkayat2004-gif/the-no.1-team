@@ -63,6 +63,10 @@ contextBridge.exposeInMainWorld('teamAPI', {
     return () => ipcRenderer.removeListener('task-type-detected', listener)
   },
 
+  // ── DIAGNOSTICS ─────────────────────────────────
+  runDiagnostic: (agentId) =>
+    ipcRenderer.invoke('run-agent-diagnostic', agentId),
+
   // ── PIPELINE (Phase 3) ─────────────────────────
   startPipeline: (payload) =>
     ipcRenderer.send('start-pipeline', payload),

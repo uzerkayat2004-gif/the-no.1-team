@@ -170,7 +170,9 @@ class PipelineManager extends EventEmitter {
         resolve({ agentId, agentName, content: content.trim() });
       };
       const onChunk = (data) => {
-        if (data.sessionId === pipeline.sessionId && data.agentId === agentId) fullResponse += data.content;
+        if (data.sessionId === pipeline.sessionId && data.agentId === agentId) {
+          fullResponse += (fullResponse ? '\n' : '') + data.content;
+        }
       };
       const onError = (data) => {
         if (data.sessionId === pipeline.sessionId && data.agentId === agentId) lastError = data.error;
@@ -182,6 +184,8 @@ class PipelineManager extends EventEmitter {
         }
       };
       const timeout = setTimeout(() => {
+        // Kill the timed-out agent process to prevent ghost processes
+        agentRunner.stopAgent(agentId, pipeline.sessionId);
         finish(fullResponse || `⚠️ ${agentName} timed out before replying.`);
       }, options.timeoutMs || 120000);
       agentRunner.on('agent-chunk', onChunk);

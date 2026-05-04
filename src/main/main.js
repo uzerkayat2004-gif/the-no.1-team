@@ -387,6 +387,13 @@ agentRunner.on('agent-error', data => sendToRenderer('agent-error', data))
 agentRunner.on('agent-stopped', data => sendToRenderer('agent-stopped', data))
 agentRunner.on('session-stopped', data => sendToRenderer('session-stopped', data))
 
+// Diagnostic: quick smoke test for a provider
+ipcMain.handle('run-agent-diagnostic', (event, agentId) => {
+  const sessionId = `diag-${agentId}-${Date.now()}`
+  agentRunner.runDiagnostic(agentId, sessionId)
+  return { sessionId, agentId, status: 'started' }
+})
+
 ipcMain.handle('open-workspace', () => { shell.openPath(workspacePath) })
 ipcMain.handle('get-proxy-settings', () => loadProxySettings())
 ipcMain.on('save-proxy-settings', (event, settings) => { saveProxySettings(settings) })

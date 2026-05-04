@@ -35,12 +35,16 @@ const PROVIDER_PROFILES = {
     name: 'Claude Code',
     color: '#F07830',
     command: isWindows ? 'claude.cmd' : 'claude',
+    // Claude Code CLI: -p - reads prompt from stdin, --output-format stream-json gives JSONL
+    // We do NOT pass --verbose (adds noise to headless output)
+    promptMode: 'stdin', // prompt written to stdin, -p - tells CLI to read it
     taskArgs: (task, model) => {
-      const args = ['-p', '-', '--output-format', 'stream-json', '--verbose'];
+      const args = ['-p', '-', '--output-format', 'stream-json'];
       if (model) args.push('--model', model);
       return args;
     },
     defaultModel: 'opus',
+    startupTimeoutMs: 90000, // Claude can take time for model loading
     executionModes: ['native', 'proxy'],
     defaultExecutionMode: 'native',
     modeCapabilities: {
@@ -90,12 +94,18 @@ const PROVIDER_PROFILES = {
     name: 'Codex',
     color: '#9B9BA8',
     command: isWindows ? 'codex.cmd' : 'codex',
+    // Codex CLI: prompt passed as positional argument after flags
+    // --json gives structured JSONL output, --sandbox workspace-write gives file access
+    promptMode: 'argument', // prompt appended as last argument
     taskArgs: (task, model) => {
-      const args = ['exec', '-'];
+      const args = ['exec', '--json', '--sandbox', 'workspace-write'];
       if (model) args.push('--model', model);
+      // Prompt goes last as positional argument
+      if (task) args.push(task);
       return args;
     },
     defaultModel: 'gpt-5.5',
+    startupTimeoutMs: 90000,
     executionModes: ['native', 'proxy'],
     defaultExecutionMode: 'native',
     modeCapabilities: {
@@ -122,7 +132,7 @@ const PROVIDER_PROFILES = {
     proxyModels: [
       { slot: 'main', label: 'Proxy Model', description: 'What model your proxy maps Codex requests to' },
     ],
-    outputFormat: 'json',
+    outputFormat: 'jsonl',
     envVars: (proxySettings) => ({
       OPENAI_BASE_URL:  proxySettings.openaiBaseUrl || 'http://localhost:20128/v1',
       OPENAI_API_KEY:   proxySettings.apiKey || 'dummy',
@@ -140,15 +150,21 @@ const PROVIDER_PROFILES = {
     id: 'gemini',
     name: 'Gemini CLI',
     color: '#5B9CF6',
-    command: isWindows ? 'npx.cmd' : 'npx',
+    // Prefer installed gemini binary; agentRunner will fallback to npx if not found
+    command: isWindows ? 'gemini.cmd' : 'gemini',
+    fallbackCommand: isWindows ? 'npx.cmd' : 'npx',
+    fallbackPrefix: ['-y', '@google/gemini-cli'],
+    // Gemini CLI: prompt passed as argument to -p, --output-format json for structured output
+    promptMode: 'argument', // prompt appended as -p "<prompt>"
     taskArgs: (task, model) => {
-      const args = ['-y', '@google/gemini-cli', '-p', '-'];
+      const args = ['-p', task || '', '--output-format', 'json'];
       if (model && model !== 'auto') {
         args.push('--model', model);
       }
       return args;
     },
     defaultModel: 'auto',
+    startupTimeoutMs: 120000, // Gemini can be slow especially via npx
     executionModes: ['native'],
     defaultExecutionMode: 'native',
     modeCapabilities: {
@@ -164,12 +180,12 @@ const PROVIDER_PROFILES = {
     ],
     // No proxy for Gemini
     proxyModels: null,
-    outputFormat: 'plain',
+    outputFormat: 'json',
     envVars: () => ({}),
     capabilities: ['research', 'coding', 'review', 'brainstorm', 'document'],
     researchCapabilities: { webSearch: 'unknown', citations: 'required', currentFactsSafe: false, noWebAccessContract: true },
     hasBrowser: true,
-    installCheck: isWindows ? 'npx.cmd -y @google/gemini-cli --version' : 'npx -y @google/gemini-cli --version',
+    installCheck: isWindows ? 'gemini.cmd --version' : 'gemini --version',
     installGuide: 'npm install -g @google/gemini-cli',
     bestAt: ['ui-components', 'styling', 'large-context', 'documentation', 'deep-research'],
   },
