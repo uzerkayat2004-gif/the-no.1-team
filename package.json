@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "docx": "^9.6.1",
+    "firebase-admin": "^13.8.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tree-kill": "^1.2.2"
