@@ -5,6 +5,7 @@ const os                   = require('os');
 const path                 = require('path');
 const { getAllProfiles, normalizeExecutionMode } = require('./providerProfiles');
 const { loadProxySettings } = require('./proxySettings');
+const workspaceManager = require('./workspaceManager');
 
 // Default workspace path — matches main.js
 const DEFAULT_WORKSPACE = path.join(os.homedir(), 'no1team', 'workspace');
@@ -97,16 +98,6 @@ class AgentRunner extends EventEmitter {
       finalArgs = [...(profile.fallbackPrefix || []), ...args];
     }
 
-    // Windows .cmd wrapper handling
-    const isCmd = process.platform === 'win32' && command.endsWith('.cmd');
-    if (isCmd) {
-      const quotedCmd = this._quoteCommand([command, ...finalArgs]);
-      return {
-        command: process.env.ComSpec || 'cmd.exe',
-        args: ['/d', '/c', quotedCmd],
-      };
-    }
-
     return { command, args: finalArgs };
   }
 
@@ -166,6 +157,16 @@ class AgentRunner extends EventEmitter {
 
     // cwd: use workDir if provided, otherwise app workspace, never bare homedir
     const cwd = workDir || DEFAULT_WORKSPACE;
+    const workspaceValidation = workspaceManager.validateWorkspace(cwd);
+    if (!workspaceValidation.valid) {
+      this.emit('agent-error', {
+        agent: profile.name,
+        agentId,
+        error: `Workspace is invalid: ${workspaceValidation.reason}`,
+        sessionId
+      });
+      return null;
+    }
 
     let proc;
     try {
@@ -521,26 +522,103 @@ class AgentRunner extends EventEmitter {
 
   // ═══ Diagnostics ═══
 
-  // Run a quick smoke test for a provider
+  // Run a quick smoke test for a provider — returns Promise with rich diagnostic result
   runDiagnostic(agentId, sessionId) {
+    const profiles = getAllProfiles();
+    const profile  = profiles[agentId];
+
+    if (!profile) {
+      return Promise.resolve({
+        agentId,
+        sessionId: sessionId || 'none',
+        status: 'error',
+        error: `Provider "${agentId}" not found in profiles.`,
+      });
+    }
+
+    const diagSessionId = sessionId || `diag-${agentId}-${Date.now()}`;
     const prompts = {
       claude: 'Say exactly: READY FROM CLAUDE',
       codex:  'Say exactly: READY FROM CODEX',
       gemini: 'Say exactly: READY FROM GEMINI',
     };
     const prompt = prompts[agentId] || `Say exactly: READY FROM ${agentId.toUpperCase()}`;
-    console.log(`[AgentRunner] Running diagnostic for ${agentId}...`);
-    return this.runAgent(agentId, prompt, null, null, sessionId || `diag-${agentId}-${Date.now()}`, false);
+
+    // Pre-compute the launch metadata so we can return it
+    const promptMode = profile.promptMode || 'stdin';
+    const taskForArgs = promptMode === 'argument' ? prompt : null;
+    const args = profile.taskArgs(taskForArgs, profile.defaultModel);
+    const preResolved = this._resolveCommand(profile, args);
+    const cwd = DEFAULT_WORKSPACE;
+    const pathSnippet = (process.env.PATH || '').split(path.delimiter).slice(0, 5).join(path.delimiter) + '...';
+
+    // Build the display command string (what you'd type in terminal)
+    const displayCommand = preResolved.command.endsWith('cmd.exe')
+      ? preResolved.args[preResolved.args.length - 1]  // the /d /c "..." part
+      : [preResolved.command, ...preResolved.args].join(' ');
+
+    return new Promise((resolve) => {
+      let stdoutChunks = '';
+      let stderrChunks = '';
+      let resolved = false;
+
+      const finish = (exitCode) => {
+        if (resolved) return;
+        resolved = true;
+        this.removeListener('agent-chunk', onChunk);
+        this.removeListener('agent-error', onError);
+        this.removeListener('agent-done', onDone);
+        clearTimeout(timer);
+
+        resolve({
+          agentId,
+          sessionId: diagSessionId,
+          status: exitCode === 0 ? 'ok' : 'error',
+          command: displayCommand,
+          args: preResolved.args,
+          cwd,
+          promptMode,
+          outputFormat: profile.outputFormat,
+          exitCode: exitCode ?? -1,
+          stdoutSnippet: (stdoutChunks || '(no output)').slice(0, 1000),
+          stderrSnippet: (stderrChunks || '(none)').slice(0, 500),
+          pathSnippet,
+        });
+      };
+
+      const onChunk = (data) => {
+        if (data.sessionId === diagSessionId && data.agentId === agentId) {
+          stdoutChunks += (stdoutChunks ? '\n' : '') + data.content;
+        }
+      };
+      const onError = (data) => {
+        if (data.sessionId === diagSessionId && data.agentId === agentId) {
+          stderrChunks += (stderrChunks ? '\n' : '') + data.error;
+        }
+      };
+      const onDone = (data) => {
+        if (data.sessionId === diagSessionId && data.agentId === agentId) {
+          finish(data.exitCode);
+        }
+      };
+
+      this.on('agent-chunk', onChunk);
+      this.on('agent-error', onError);
+      this.on('agent-done', onDone);
+
+      // 60s safety timeout
+      const timer = setTimeout(() => finish(-1), 60000);
+
+      // Launch via normal code path — all IPC events still fire
+      console.log(`[AgentRunner] Running diagnostic for ${agentId}...`);
+      const proc = this.runAgent(agentId, prompt, null, null, diagSessionId, false);
+      if (!proc) {
+        finish(-1);
+      }
+    });
   }
 
   // ═══ Helpers ═══
-
-  _quoteCommand(parts) {
-    return parts.map(part => {
-      const value = String(part ?? '');
-      return /[\s"&|<>^]/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
-    }).join(' ');
-  }
 
   _trackProcess(proc, agentId, sessionId) {
     if (!this.activeProcesses[sessionId]) this.activeProcesses[sessionId] = {};

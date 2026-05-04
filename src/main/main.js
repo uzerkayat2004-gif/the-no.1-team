@@ -411,11 +411,10 @@ agentRunner.on('agent-error', data => sendToRenderer('agent-error', data))
 agentRunner.on('agent-stopped', data => sendToRenderer('agent-stopped', data))
 agentRunner.on('session-stopped', data => sendToRenderer('session-stopped', data))
 
-// Diagnostic: quick smoke test for a provider
-ipcMain.handle('run-agent-diagnostic', (event, agentId) => {
-  const sessionId = `diag-${agentId}-${Date.now()}`
-  agentRunner.runDiagnostic(agentId, sessionId)
-  return { sessionId, agentId, status: 'started' }
+// Diagnostic: quick smoke test for a provider — returns full result object
+ipcMain.handle('run-agent-diagnostic', async (event, agentId) => {
+  const result = await agentRunner.runDiagnostic(agentId)
+  return result
 })
 
 ipcMain.handle('open-workspace', () => { shell.openPath(workspacePath) })
@@ -483,7 +482,7 @@ brainstormChat.on('activated', data => sendToRenderer('brainstorm-chat-activated
 
 ipcMain.on('save-session-to-brain', (event, payload) => {
   const folderRel = brainMemory.saveSession(payload)
-  sendToRenderer('session-saved-to-brain', { folderRel })
+  sendToRenderer('session-saved-to-brain', { folderRel, sessionId: payload?.sessionId })
 })
 
 ipcMain.handle('load-session-context', (event, folderRel) => brainMemory.loadSessionContext(folderRel))
@@ -552,7 +551,7 @@ pipelineManager.on('pipeline-complete', (data) => {
       brainMemory.updateAgentPerformance(agentId, pipeline.taskType, true, pipeline.sendBackCount)
     })
 
-    sendToRenderer('session-saved-to-brain', { folderRel: `sessions/${(pipeline.task?.slice(0, 40) || pipeline.sessionId).replace(/[^a-z0-9-_]/gi, '-')}` })
+    sendToRenderer('session-saved-to-brain', { folderRel: `sessions/${(pipeline.task?.slice(0, 40) || pipeline.sessionId).replace(/[^a-z0-9-_]/gi, '-')}`, sessionId: pipeline.sessionId })
   } catch (e) {
     console.error('Auto-save to Brain failed:', e)
   }

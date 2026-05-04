@@ -6,14 +6,23 @@ const os = require('os');
 
 const BRAIN = path.join(os.homedir(), 'no1team', 'brain');
 
+function getSafeBrainPath(relPath) {
+  const fullPath = path.resolve(BRAIN, relPath || '');
+  const relative = path.relative(BRAIN, fullPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Access denied: Path traversal detected');
+  }
+  return fullPath;
+}
+
 function readFile(relPath) {
-  try { const f = path.join(BRAIN, relPath); if (fs.existsSync(f)) return fs.readFileSync(f, 'utf-8'); } catch(e) { console.error('Brain read error:', e); }
+  try { const f = getSafeBrainPath(relPath); if (fs.existsSync(f)) return fs.readFileSync(f, 'utf-8'); } catch(e) { console.error('Brain read error:', e); }
   return '';
 }
 
 function writeFile(relPath, content) {
-  const full = path.join(BRAIN, relPath);
   try {
+    const full = getSafeBrainPath(relPath);
     if (fs.existsSync(full)) fs.copyFileSync(full, full + '.backup');
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, content, 'utf-8');
@@ -26,8 +35,10 @@ function appendToFile(relPath, content) {
 }
 
 function restoreBackup(relPath) {
-  const full = path.join(BRAIN, relPath); const bk = full + '.backup';
-  try { if (fs.existsSync(bk)) { fs.copyFileSync(bk, full); return true; } } catch(e) { console.error('Brain restore backup error:', e); }
+  try {
+    const full = getSafeBrainPath(relPath); const bk = full + '.backup';
+    if (fs.existsSync(bk)) { fs.copyFileSync(bk, full); return true; }
+  } catch(e) { console.error('Brain restore backup error:', e); }
   return false;
 }
 
@@ -179,4 +190,4 @@ function getSkillStats() {
   return stats;
 }
 
-module.exports = { saveSession, loadSessionContext, buildResumeBriefing, loadRelevantMemory, updateAgentPerformance, updateSkillPerformance, logError, listSessions, getSkillStats, readFile, writeFile, restoreBackup, extractMeta };
+module.exports = { saveSession, loadSessionContext, buildResumeBriefing, loadRelevantMemory, updateAgentPerformance, updateSkillPerformance, logError, listSessions, getSkillStats, readFile, writeFile, restoreBackup, extractMeta, getSafeBrainPath };

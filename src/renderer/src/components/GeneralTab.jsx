@@ -335,6 +335,7 @@ export default function GeneralTab({ sessionId, onTitleUpdate }) {
     }))
 
     removers.push(window.teamAPI.onSessionSavedToBrain?.((data) => {
+      if (data.sessionId && data.sessionId !== currentSessionId) return
       addMsg({ type: 'system', content: `💾 Session saved to Brain: ${data.folderRel}`, agent: 'System', isSystem: true })
     }))
 

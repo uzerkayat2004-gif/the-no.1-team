@@ -8,7 +8,9 @@
     "dev:web": "vite --config vite.config.js",
     "build": "electron-vite build",
     "build:web": "vite build --config vite.config.js",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "test": "node --test tests/*.test.js",
+    "test:e2e": "node tests/app.test.js"
   },
   "keywords": [
     "multi-agent",
@@ -19,11 +21,6 @@
   ],
   "author": "",
   "license": "MIT",
-  "build": {
-    "asarUnpack": [
-      "node_modules/node-pty/**"
-    ]
-  },
   "dependencies": {
     "docx": "^9.6.1",
     "firebase-admin": "^13.8.0",
