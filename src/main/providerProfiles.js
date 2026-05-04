@@ -36,10 +36,10 @@ const PROVIDER_PROFILES = {
     color: '#F07830',
     command: isWindows ? 'claude.cmd' : 'claude',
     // Claude Code CLI: -p - reads prompt from stdin, --output-format stream-json gives JSONL
-    // We do NOT pass --verbose (adds noise to headless output)
+    // --verbose is REQUIRED by Claude CLI when using stream-json with -p
     promptMode: 'stdin', // prompt written to stdin, -p - tells CLI to read it
     taskArgs: (task, model) => {
-      const args = ['-p', '-', '--output-format', 'stream-json'];
+      const args = ['-p', '-', '--output-format', 'stream-json', '--verbose'];
       if (model) args.push('--model', model);
       return args;
     },
