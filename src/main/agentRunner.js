@@ -87,7 +87,10 @@ class AgentRunner extends EventEmitter {
     return this._geminiAvailable;
   }
 
-  // Resolve actual command and args for a provider (handles Gemini fallback)
+  // Resolve actual command and args for a provider
+  // Handles: (1) Gemini fallback to npx, (2) Windows .cmd wrapper via cmd.exe
+  // On Windows, Node's spawn() cannot execute .cmd files directly — they must
+  // go through cmd.exe /d /c. Without this, spawn fails with EINVAL.
   _resolveCommand(profile, args) {
     let command = profile.command;
     let finalArgs = args;
@@ -96,6 +99,16 @@ class AgentRunner extends EventEmitter {
     if (profile.id === 'gemini' && profile.fallbackCommand && !this._isGeminiInstalled()) {
       command = profile.fallbackCommand;
       finalArgs = [...(profile.fallbackPrefix || []), ...args];
+    }
+
+    // Windows .cmd files must be launched through cmd.exe
+    const isCmd = process.platform === 'win32' && command.endsWith('.cmd');
+    if (isCmd) {
+      const quotedCmd = this._quoteCommand([command, ...finalArgs]);
+      return {
+        command: process.env.ComSpec || 'cmd.exe',
+        args: ['/d', '/c', quotedCmd],
+      };
     }
 
     return { command, args: finalArgs };

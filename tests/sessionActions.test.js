@@ -13,10 +13,11 @@ const {
   pinSession,
   archiveSession,
   deleteSession,
-  duplicateSession
+  duplicateSession,
+  getSafeSessionPath
 } = require('../src/main/sessionActions.js');
 
-const SESSIONS_DIR = path.join('/mock/home', 'no1team', 'brain', 'sessions');
+const SESSIONS_DIR = getSafeSessionPath('');
 
 test('sessionActions', async (t) => {
   afterEach(() => {

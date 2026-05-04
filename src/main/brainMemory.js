@@ -15,8 +15,12 @@ function getSafeBrainPath(relPath) {
   return fullPath;
 }
 
+function isPathTraversalError(error) {
+  return error?.message?.includes('Path traversal');
+}
+
 function readFile(relPath) {
-  try { const f = getSafeBrainPath(relPath); if (fs.existsSync(f)) return fs.readFileSync(f, 'utf-8'); } catch(e) { console.error('Brain read error:', e); }
+  try { const f = getSafeBrainPath(relPath); if (fs.existsSync(f)) return fs.readFileSync(f, 'utf-8'); } catch(e) { if (!isPathTraversalError(e)) console.error('Brain read error:', e); }
   return '';
 }
 
@@ -27,7 +31,7 @@ function writeFile(relPath, content) {
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, content, 'utf-8');
     return true;
-  } catch(e) { console.error('Brain write error:', e); return false; }
+  } catch(e) { if (!isPathTraversalError(e)) console.error('Brain write error:', e); return false; }
 }
 
 function appendToFile(relPath, content) {
