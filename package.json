@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^6.0.1",
     "electron": "^35.2.1",
     "electron-vite": "^5.0.0"
   }
