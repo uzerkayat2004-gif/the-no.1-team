@@ -385,13 +385,26 @@ ipcMain.handle('get-session-context', (event, sessionId) => sessionCtx.getSessio
 // Provider profiles IPC — use serializable version (no functions)
 ipcMain.handle('get-provider-profiles', () => getSerializableProfiles())
 ipcMain.handle('test-provider', async (event, agentId) => {
-  const { exec } = require('child_process')
+  const spawn = require('cross-spawn')
+  const { parse } = require('shell-quote')
   const profiles = getAllProfiles()
   const profile = profiles[agentId]
   if (!profile) return { installed: false, error: 'Provider not found' }
+
+  const parsedArgs = parse(profile.installCheck)
+  const safeArgs = parsedArgs.filter(arg => typeof arg === 'string')
+
+  if (safeArgs.length === 0) return { installed: false, error: 'Invalid installCheck command' }
+
+  const command = safeArgs[0]
+  const args = safeArgs.slice(1)
+
   return new Promise((resolve) => {
-    exec(profile.installCheck, { timeout: 5000 }, (err) => {
-      if (err) resolve({ installed: false, error: err.message })
+    const child = spawn(command, args, { timeout: 5000 })
+
+    child.on('error', (err) => resolve({ installed: false, error: err.message }))
+    child.on('close', (code) => {
+      if (code !== 0) resolve({ installed: false, error: `Command failed with code ${code}` })
       else resolve({ installed: true })
     })
   })
